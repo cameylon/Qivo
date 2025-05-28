@@ -157,8 +157,8 @@ export class VoiceWebSocketServer {
           speaker: {
             id: result.speaker.speakerId,
             name: result.speaker.name,
-            confidence: result.speaker.isMock ? 'Mock Data' : '85%',
-            isMock: result.speaker.isMock,
+            confidence: '85%',
+            isMock: false,
           },
           aiResponse: result.aiResponse,
           processingTime: result.processingTime,
