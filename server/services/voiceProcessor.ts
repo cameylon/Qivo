@@ -209,12 +209,19 @@ export class VoiceProcessor {
 
   private calculateAverageAmplitude(audioBuffer: Buffer): number {
     let sum = 0;
-    for (let i = 0; i < audioBuffer.length; i += 2) {
-      // Read 16-bit samples
-      const sample = audioBuffer.readInt16LE(i);
-      sum += Math.abs(sample);
+    const sampleCount = Math.floor(audioBuffer.length / 2);
+    
+    for (let i = 0; i < audioBuffer.length - 1; i += 2) {
+      try {
+        // Read 16-bit samples safely
+        const sample = audioBuffer.readInt16LE(i);
+        sum += Math.abs(sample);
+      } catch (error) {
+        // Skip invalid samples
+        continue;
+      }
     }
-    return sum / (audioBuffer.length / 2);
+    return sampleCount > 0 ? sum / sampleCount : 0;
   }
 
   private estimatePitch(avgAmplitude: number): number {
@@ -231,9 +238,18 @@ export class VoiceProcessor {
 
   private calculateVariance(audioBuffer: Buffer): number {
     const samples: number[] = [];
-    for (let i = 0; i < Math.min(audioBuffer.length, 1000); i += 2) {
-      samples.push(Math.abs(audioBuffer.readInt16LE(i)));
+    const maxSamples = Math.min(audioBuffer.length - 1, 1000);
+    
+    for (let i = 0; i < maxSamples; i += 2) {
+      try {
+        samples.push(Math.abs(audioBuffer.readInt16LE(i)));
+      } catch (error) {
+        // Skip invalid samples for robust processing
+        continue;
+      }
     }
+    
+    if (samples.length === 0) return 0;
     
     const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
     const variance = samples.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / samples.length;
