@@ -177,19 +177,87 @@ export class OpenAIService {
         messages: messages,
         max_tokens: 100, // Reduced for faster responses
         temperature: 0.6, // Slightly reduced for more focused responses
-        stream: false, // Ensure we're not using streaming for latency
+        stream: true, // Enable streaming for real-time token delivery
       });
+
+      let fullContent = "";
+      
+      for await (const chunk of response) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          fullContent += content;
+        }
+      }
 
       const processingTime = Date.now() - startTime;
 
       return {
-        content: response.choices[0].message.content || "I'm sorry, I couldn't generate a response.",
+        content: fullContent || "I'm sorry, I couldn't generate a response.",
         model: "gpt-4o",
         processingTime,
       };
     } catch (error) {
       console.error("Response generation error:", error);
       throw new Error(`Failed to generate AI response: ${error.message}`);
+    }
+  }
+
+  async generateStreamingResponse(
+    transcript: string, 
+    context: { emotion?: string; speaker?: string; conversationHistory?: string[] },
+    onToken: (token: string) => void
+  ): Promise<AIResponse> {
+    try {
+      const startTime = Date.now();
+
+      // Simplified system prompt for faster processing
+      const systemPrompt = `You are Qivo, a helpful voice assistant. Keep responses concise and natural. Current emotion: ${context.emotion || 'neutral'}.`;
+
+      const messages: any[] = [
+        { role: "system", content: systemPrompt }
+      ];
+
+      // Limit conversation history to reduce token count and processing time
+      if (context.conversationHistory && context.conversationHistory.length > 0) {
+        context.conversationHistory.slice(-3).forEach((msg, index) => {
+          messages.push({
+            role: index % 2 === 0 ? "user" : "assistant",
+            content: msg
+          });
+        });
+      }
+
+      messages.push({ role: "user", content: transcript });
+
+      const stream = await openai.chat.completions.create({
+        model: "gpt-4o",
+        messages: messages,
+        max_tokens: 80, // Even smaller for ultra-fast responses
+        temperature: 0.6,
+        stream: true,
+      });
+
+      let fullContent = "";
+      
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content;
+        if (content) {
+          fullContent += content;
+          onToken(content); // Stream tokens in real-time
+        }
+      }
+
+      const processingTime = Date.now() - startTime;
+
+      return {
+        content: fullContent || "I'm sorry, I couldn't generate a response.",
+        model: "gpt-4o",
+        processingTime,
+      };
+
+    } catch (error) {
+      console.error("Streaming response error:", error);
+      throw new Error(`Failed to generate streaming AI response: ${error.message}`);
     }
   }
 }

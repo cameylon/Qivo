@@ -1,0 +1,178 @@
+// Qivo Voice Agent Template - Node.js/Express (Self-correcting & Low-Latency Focus)
+// File Structure:
+// ├── config.js
+// ├── server.js
+// ├── controllers
+// │   └── voiceController.js
+// ├── services
+// │   ├── transcriptionService.js
+// │   ├── emotionAnalyzer.js
+// │   ├── speakerRecognition.js
+// │   ├── selfCorrectionService.js
+// │   └── responseService.js
+// └── utils
+//     └── logger.js
+
+// config.js
+type Config = {
+  PORT: number;
+  WS_PATH: string;
+  STT_API_ENDPOINT: string;
+  STREAMING_API_ENDPOINT: string;
+  LLM_API_KEY: string;
+  EMOTION_MODEL_PATH: string;
+  SPEAKER_DB: string;
+  REDUCE_LATENCY: boolean;
+};
+
+const config: Config = {
+  PORT: process.env.PORT || 5000,
+  WS_PATH: '/ws',
+  STT_API_ENDPOINT: process.env.STT_API_ENDPOINT,
+  STREAMING_API_ENDPOINT: process.env.STREAMING_API_ENDPOINT,
+  LLM_API_KEY: process.env.LLM_API_KEY,
+  EMOTION_MODEL_PATH: process.env.EMOTION_MODEL_PATH,
+  SPEAKER_DB: process.env.SPEAKER_DB,
+  REDUCE_LATENCY: true,
+};
+
+module.exports = config;
+
+// server.js
+const express = require('express');
+const http = require('http');
+const WebSocket = require('ws');
+const voiceController = require('./controllers/voiceController');
+const { PORT, WS_PATH } = require('./config');
+
+const app = express();
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server, path: WS_PATH });
+
+wss.on('connection', socket => voiceController.handleConnection(socket));
+app.get('/health', (_req, res) => res.send('OK'));
+
+server.listen(PORT, () => console.log(`Listening on ${PORT}`));
+
+// controllers/voiceController.js
+const transcriptionService = require('../services/transcriptionService');
+const emotionAnalyzer = require('../services/emotionAnalyzer');
+const speakerRecognition = require('../services/speakerRecognition');
+const selfCorrection = require('../services/selfCorrectionService');
+const responseService = require('../services/responseService');
+
+async function handleConnection(socket) {
+  let lastTranscript = '';
+
+  socket.on('message', async (data) => {
+    // 1. Incremental transcription
+    const { delta, transcript, isFinal } = await transcriptionService.transcribe(data);
+    socket.send(JSON.stringify({ type: 'transcript_delta', delta }));
+
+    // update moving window
+    lastTranscript = transcript;
+
+    if (isFinal) {
+      // 2. Self-correction pass to refine transcript
+      const corrected = await selfCorrection.refine(transcript);
+      // 3. Emotion & speaker analysis
+      const [emotion, speaker] = await Promise.all([
+        emotionAnalyzer.analyze(corrected, data),
+        speakerRecognition.identify(data)
+      ]);
+      // 4. Generate streamed response tokens
+      const stream = responseService.generateReplyStream({ text: corrected, speaker, emotion });
+      for await (const token of stream) {
+        socket.send(JSON.stringify({ type: 'reply_token', token }));
+      }
+    }
+  });
+}
+
+module.exports = { handleConnection };
+
+// services/transcriptionService.js
+const axios = require('axios');
+const { STT_API_ENDPOINT, REDUCE_LATENCY } = require('../config');
+let partialBuffer = '';
+
+async function transcribe(audioChunk) {
+  // send audioChunk to STT streaming endpoint
+  const response = await axios.post(`${STT_API_ENDPOINT}/stream`, audioChunk, { responseType: 'stream' });
+  let delta = '';
+  for await (const chunk of response.data) {
+    const text = chunk.toString();
+    delta += text;
+    if (REDUCE_LATENCY) break; // emit immediately
+  }
+  const transcript = partialBuffer + delta;
+  partialBuffer = transcript;
+  const isFinal = response.headers['x-final'] === 'true';
+  return { delta, transcript, isFinal };
+}
+
+module.exports = { transcribe };
+
+// services/selfCorrectionService.js
+/**
+ * Refine transcript using lightweight local model or quick API
+ */
+async function refine(text) {
+  // TODO: implement text-cleanup & correction
+  // e.g., apply grammar correction API for minimal latency
+  return text; // stub
+}
+
+module.exports = { refine };
+
+// services/emotionAnalyzer.js
+async function analyze(text, audioChunk) {
+  // TODO: batch extract vocal & text features
+  return { sentiment: 'neutral', confidence: 0.0 };
+}
+
+module.exports = { analyze };
+
+// services/speakerRecognition.js
+async function identify(audioChunk) {
+  return { speakerId: 'unknown', confidence: 0.0 };
+}
+
+module.exports = { identify };
+
+// services/responseService.js
+const { STREAMING_API_ENDPOINT, LLM_API_KEY } = require('../config');
+const axios = require('axios');
+/**
+ * Stream LLM tokens back for reduced completion time
+ */
+async function* generateReplyStream({ text, speaker, emotion }) {
+  const systemPrompt = `You are Qivo, an empathetic voice assistant. User feels ${emotion.sentiment}.`;  
+  const response = await axios.post(
+    `${STREAMING_API_ENDPOINT}/chat/completions`, {
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: text }
+      ],
+      stream: true
+    }, { headers: { Authorization: `Bearer ${LLM_API_KEY}` }, responseType: 'stream' }
+  );
+
+  for await (const chunk of response.data) {
+    const payload = JSON.parse(chunk.toString());
+    if (payload.choices) {
+      const token = payload.choices[0].delta?.content;
+      if (token) yield token;
+    }
+  }
+}
+
+module.exports = { generateReplyStream };
+
+// utils/logger.js
+function log(...args) {
+  console.log(new Date().toISOString(), ...args);
+}
+
+module.exports = { log };
