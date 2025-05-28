@@ -84,8 +84,8 @@ export function Sidebar({ isConnected, connectionStatus, metrics, sessionId }: S
           <div className="flex items-center justify-between">
             <span className="text-xs text-gray-600">Speaker Recognition</span>
             <div className="flex items-center space-x-1">
-              <div className="w-2 h-2 bg-amber-500 rounded-full" />
-              <span className="text-xs text-amber-600">Mock Mode</span>
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              <span className="text-xs text-green-600">Active</span>
             </div>
           </div>
         </div>
