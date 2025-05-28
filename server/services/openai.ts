@@ -33,9 +33,27 @@ export class OpenAIService {
     try {
       const startTime = Date.now();
       
-      // Convert buffer to file-like object for OpenAI
-      const file = new File([audioBuffer], `audio.${format}`, { 
-        type: `audio/${format}` 
+      // Create a proper file for OpenAI with the correct MIME type
+      let mimeType: string;
+      let filename: string;
+      
+      if (format === "webm" || format.includes("webm")) {
+        mimeType = "audio/webm";
+        filename = "audio.webm";
+      } else if (format === "mp4" || format.includes("mp4")) {
+        mimeType = "audio/mp4";
+        filename = "audio.mp4";
+      } else if (format === "wav") {
+        mimeType = "audio/wav";
+        filename = "audio.wav";
+      } else {
+        // Default to webm for unknown formats
+        mimeType = "audio/webm";
+        filename = "audio.webm";
+      }
+      
+      const file = new File([audioBuffer], filename, { 
+        type: mimeType 
       });
 
       const transcription = await openai.audio.transcriptions.create({
