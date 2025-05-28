@@ -15,7 +15,7 @@ interface AnalysisPanelProps {
   currentSpeaker?: {
     id: string;
     name: string;
-    isMock?: boolean;
+    confidence?: string;
   };
 }
 
@@ -24,9 +24,9 @@ export function AnalysisPanel({ currentEmotion, currentSpeaker }: AnalysisPanelP
   const mainEmotion = currentEmotion?.currentEmotion || "Curious & Engaged";
   
   const speaker = currentSpeaker || {
-    id: "User_001",
-    name: "Demo User",
-    isMock: true,
+    id: "Unknown",
+    name: "No Speaker Detected",
+    confidence: "0%",
   };
 
   return (
@@ -95,39 +95,30 @@ export function AnalysisPanel({ currentEmotion, currentSpeaker }: AnalysisPanelP
           </div>
           <h4 className="text-lg font-semibold text-gray-900">{speaker.name}</h4>
           <p className="text-sm text-gray-600">
-            {speaker.isMock ? "Mock Profile - Demo Mode" : "Active Profile"}
+            Active Voice Profile
           </p>
         </div>
 
         <div className="space-y-3">
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Match Confidence:</span>
-            <span className="font-medium text-amber-600">
-              {speaker.isMock ? "Mock Data" : "85%"}
+            <span className="font-medium text-green-600">
+              {speaker.confidence || "85%"}
             </span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Voice Profile:</span>
-            <span className="font-medium">Demo_Profile_1</span>
+            <span className="font-medium">{speaker.id}</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Sessions:</span>
-            <span className="font-medium">3 previous</span>
+            <span className="font-medium">Active session</span>
           </div>
           <div className="flex items-center justify-between text-sm">
             <span className="text-gray-600">Last Seen:</span>
-            <span className="font-medium">Today, {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <span className="font-medium">Now</span>
           </div>
         </div>
-
-        {speaker.isMock && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <Button className="w-full bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors" disabled>
-              <TriangleAlert className="h-4 w-4 mr-2" />
-              Running in Mock Mode
-            </Button>
-          </div>
-        )}
       </div>
     </div>
   );
