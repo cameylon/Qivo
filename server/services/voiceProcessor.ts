@@ -177,6 +177,131 @@ export class VoiceProcessor {
     };
   }
 
+  async processVoiceMessageWithStreaming(
+    audioBuffer: Buffer,
+    sessionId: number,
+    audioFormat: string,
+    onToken: (token: string) => void
+  ): Promise<VoiceProcessingResult> {
+    const messageId = `${sessionId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const startTime = Date.now();
+
+    try {
+      const processingPromise = this._processVoiceInternalWithStreaming(
+        audioBuffer,
+        sessionId,
+        audioFormat,
+        startTime,
+        onToken
+      );
+
+      this.processingQueue.set(messageId, processingPromise);
+      const result = await processingPromise;
+      return result;
+
+    } finally {
+      this.processingQueue.delete(messageId);
+    }
+  }
+
+  private async _processVoiceInternalWithStreaming(
+    audioBuffer: Buffer,
+    sessionId: number,
+    audioFormat: string,
+    startTime: number,
+    onToken: (token: string) => void
+  ): Promise<VoiceProcessingResult> {
+    try {
+      // Run transcription and speaker recognition in parallel for speed
+      const [transcriptionResult, speakerResult] = await Promise.all([
+        openaiService.transcribeAudio(audioBuffer, audioFormat),
+        this.recognizeSpeaker(audioBuffer),
+      ]);
+      
+      if (!transcriptionResult.text.trim()) {
+        throw new Error("No speech detected in audio");
+      }
+
+      // Get conversation history early (can run in parallel with emotion analysis)
+      const [emotionResult, recentConversations] = await Promise.all([
+        openaiService.analyzeEmotion(transcriptionResult.text),
+        storage.getConversationsBySession(sessionId),
+      ]);
+
+      // Store user conversation first
+      const userConversation = await storage.createConversation({
+        sessionId,
+        type: 'user',
+        content: transcriptionResult.text,
+        confidence: transcriptionResult.confidence,
+        emotion: emotionResult.currentEmotion,
+        speakerId: speakerResult.speakerId,
+        audioFormat,
+        modelUsed: 'whisper-1',
+        processingTime: null,
+      });
+
+      // Prepare conversation history
+      const conversationHistory = recentConversations
+        .slice(-3)
+        .map(conv => conv.content);
+
+      // Generate streaming AI response with real-time token delivery
+      const aiResponse = await openaiService.generateStreamingResponse(
+        transcriptionResult.text,
+        {
+          emotion: emotionResult.currentEmotion,
+          speaker: speakerResult.speakerId,
+          conversationHistory,
+        },
+        onToken
+      );
+
+      // Store emotion analysis and AI response in background
+      setImmediate(async () => {
+        try {
+          await Promise.all([
+            storage.createEmotionAnalysis({
+              conversationId: userConversation.id,
+              sentiment: emotionResult.sentiment,
+              emotions: JSON.stringify(emotionResult.emotions),
+              confidence: emotionResult.confidence,
+            }),
+            storage.createConversation({
+              sessionId,
+              type: 'ai',
+              content: aiResponse.content,
+              confidence: null,
+              emotion: null,
+              speakerId: null,
+              audioFormat: null,
+              modelUsed: aiResponse.model,
+              processingTime: aiResponse.processingTime,
+            })
+          ]);
+        } catch (err) {
+          console.warn('Failed to store background data:', err);
+        }
+      });
+
+      const totalProcessingTime = Date.now() - startTime;
+
+      return {
+        transcript: transcriptionResult.text,
+        confidence: transcriptionResult.confidence,
+        emotion: emotionResult,
+        speaker: speakerResult.profile,
+        aiResponse: aiResponse.content,
+        conversation: userConversation,
+        processingTime: totalProcessingTime,
+      };
+
+    } catch (error) {
+      console.error("Streaming voice processing error:", error);
+      throw new Error(`Streaming voice processing failed: ${error.message}`);
+    }
+  }
+
   async getSessionMetrics(sessionId: number) {
     const conversations = await storage.getConversationsBySession(sessionId);
     const session = await storage.getVoiceSession(sessionId);
