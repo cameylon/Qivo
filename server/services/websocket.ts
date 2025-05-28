@@ -130,7 +130,7 @@ export class VoiceWebSocketServer {
     }
 
     try {
-      // Send processing indicator
+      // Send immediate acknowledgment for low latency feel
       this.sendMessage(client.ws, {
         type: 'response',
         data: {
@@ -139,14 +139,14 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Process the voice message
+      // Process the voice message with optimized settings
       const result = await voiceProcessor.processVoiceMessage(
         audioBuffer,
         client.sessionId,
-        'webm' // Default format, could be detected or specified by client
+        'webm'
       );
 
-      // Send the complete result back to client
+      // Send the complete result back to client immediately
       this.sendMessage(client.ws, {
         type: 'response',
         data: {
@@ -166,8 +166,12 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Update system metrics
-      await this.updateSystemMetrics();
+      // Update system metrics in background (non-blocking)
+      setImmediate(() => {
+        this.updateSystemMetrics().catch(err => 
+          console.warn('Failed to update system metrics:', err)
+        );
+      });
 
     } catch (error) {
       console.error(`Audio processing error for client ${clientId}:`, error);

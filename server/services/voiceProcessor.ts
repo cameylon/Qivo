@@ -52,20 +52,23 @@ export class VoiceProcessor {
     startTime: number
   ): Promise<VoiceProcessingResult> {
     try {
-      // Step 1: Speech-to-Text
-      const transcriptionResult = await openaiService.transcribeAudio(audioBuffer, audioFormat);
+      // Run transcription and speaker recognition in parallel for speed
+      const [transcriptionResult, speakerResult] = await Promise.all([
+        openaiService.transcribeAudio(audioBuffer, audioFormat),
+        this.recognizeSpeaker(audioBuffer), // This is fast since it's mocked
+      ]);
       
       if (!transcriptionResult.text.trim()) {
         throw new Error("No speech detected in audio");
       }
 
-      // Step 2: Speaker Recognition (mock implementation)
-      const speakerResult = await this.recognizeSpeaker(audioBuffer);
+      // Get conversation history early (can run in parallel with emotion analysis)
+      const [emotionResult, recentConversations] = await Promise.all([
+        openaiService.analyzeEmotion(transcriptionResult.text),
+        storage.getConversationsBySession(sessionId),
+      ]);
 
-      // Step 3: Emotion Analysis
-      const emotionResult = await openaiService.analyzeEmotion(transcriptionResult.text);
-
-      // Step 4: Store user conversation
+      // Store user conversation first
       const userConversation = await storage.createConversation({
         sessionId,
         type: 'user',
@@ -78,41 +81,47 @@ export class VoiceProcessor {
         processingTime: null,
       });
 
-      // Step 5: Store emotion analysis
-      await storage.createEmotionAnalysis({
-        conversationId: userConversation.id,
-        sentiment: emotionResult.sentiment,
-        emotions: JSON.stringify(emotionResult.emotions),
-        confidence: emotionResult.confidence,
-      });
-
-      // Step 6: Get conversation history for context
-      const recentConversations = await storage.getConversationsBySession(sessionId);
+      // Prepare conversation history
       const conversationHistory = recentConversations
-        .slice(-10) // Last 10 messages
+        .slice(-6) // Reduced from 10 to 6 for faster processing
         .map(conv => conv.content);
 
-      // Step 7: Generate AI response
-      const aiResponse = await openaiService.generateResponse(
-        transcriptionResult.text,
-        {
-          emotion: emotionResult.currentEmotion,
-          speaker: speakerResult.speakerId,
-          conversationHistory,
-        }
-      );
+      // Generate AI response and store emotion analysis in parallel
+      const [aiResponse] = await Promise.all([
+        openaiService.generateResponse(
+          transcriptionResult.text,
+          {
+            emotion: emotionResult.currentEmotion,
+            speaker: speakerResult.speakerId,
+            conversationHistory,
+          }
+        ),
+        // Store emotion analysis in background (non-blocking)
+        storage.createEmotionAnalysis({
+          conversationId: userConversation.id,
+          sentiment: emotionResult.sentiment,
+          emotions: JSON.stringify(emotionResult.emotions),
+          confidence: emotionResult.confidence,
+        }).catch(err => console.warn('Failed to store emotion analysis:', err)),
+      ]);
 
-      // Step 8: Store AI response
-      const aiConversation = await storage.createConversation({
-        sessionId,
-        type: 'ai',
-        content: aiResponse.content,
-        confidence: null,
-        emotion: null,
-        speakerId: null,
-        audioFormat: null,
-        modelUsed: aiResponse.model,
-        processingTime: aiResponse.processingTime,
+      // Store AI response in background after sending response to client
+      setImmediate(async () => {
+        try {
+          await storage.createConversation({
+            sessionId,
+            type: 'ai',
+            content: aiResponse.content,
+            confidence: null,
+            emotion: null,
+            speakerId: null,
+            audioFormat: null,
+            modelUsed: aiResponse.model,
+            processingTime: aiResponse.processingTime,
+          });
+        } catch (err) {
+          console.warn('Failed to store AI conversation:', err);
+        }
       });
 
       const totalProcessingTime = Date.now() - startTime;
