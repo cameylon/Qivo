@@ -33,8 +33,9 @@ export default function VoiceProcessing() {
     recordingDuration,
     audioFormat,
   } = useAudioRecorder((audioBlob) => {
-    if (sessionId && isConnected) {
-      // Convert blob to buffer and send via WebSocket
+    if (sessionId && isConnected && audioBlob.size > 1024) {
+      // Only send audio if it's large enough and we have an active session
+      console.log(`Sending audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       audioBlob.arrayBuffer().then((buffer) => {
         sendMessage(new Uint8Array(buffer));
       });

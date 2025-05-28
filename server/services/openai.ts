@@ -33,11 +33,22 @@ export class OpenAIService {
     try {
       const startTime = Date.now();
       
+      // Validate that we have audio data
+      if (!audioBuffer || audioBuffer.length === 0) {
+        throw new Error("No audio data provided");
+      }
+      
+      // Check minimum audio size (at least 1KB)
+      if (audioBuffer.length < 1024) {
+        throw new Error("Audio data too small to process");
+      }
+      
       // Create a proper file for OpenAI with the correct MIME type
       let mimeType: string;
       let filename: string;
       
-      if (format === "webm" || format.includes("webm")) {
+      // Determine the format based on the actual buffer content or format parameter
+      if (format === "webm" || format.includes("webm") || format.includes("opus")) {
         mimeType = "audio/webm";
         filename = "audio.webm";
       } else if (format === "mp4" || format.includes("mp4")) {
@@ -47,11 +58,14 @@ export class OpenAIService {
         mimeType = "audio/wav";
         filename = "audio.wav";
       } else {
-        // Default to webm for unknown formats
+        // Default to webm for unknown formats since most browsers support it
         mimeType = "audio/webm";
         filename = "audio.webm";
       }
       
+      console.log(`Processing audio: ${filename}, size: ${audioBuffer.length} bytes, format: ${format}`);
+      
+      // Create the file object for OpenAI
       const file = new File([audioBuffer], filename, { 
         type: mimeType 
       });
@@ -60,6 +74,7 @@ export class OpenAIService {
         file: file,
         model: "whisper-1",
         response_format: "verbose_json",
+        language: "en", // Specify English for better accuracy
       });
 
       const processingTime = Date.now() - startTime;

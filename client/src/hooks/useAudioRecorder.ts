@@ -73,15 +73,18 @@ export function useAudioRecorder(
       
       source.connect(analyserRef.current);
 
-      // Set up MediaRecorder
+      // Set up MediaRecorder with optimal settings
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
         ? 'audio/webm;codecs=opus'
         : MediaRecorder.isTypeSupported('audio/webm')
         ? 'audio/webm'
-        : 'audio/mp4';
+        : MediaRecorder.isTypeSupported('audio/mp4')
+        ? 'audio/mp4'
+        : 'audio/wav';
 
       mediaRecorderRef.current = new MediaRecorder(stream, {
         mimeType,
+        audioBitsPerSecond: 128000, // 128 kbps for good quality
       });
 
       audioChunksRef.current = [];
@@ -89,11 +92,6 @@ export function useAudioRecorder(
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
-          
-          // Send audio data in real-time if callback provided
-          if (onAudioData) {
-            onAudioData(event.data);
-          }
         }
       };
 
@@ -106,8 +104,8 @@ export function useAudioRecorder(
         }
       };
 
-      // Start recording
-      mediaRecorderRef.current.start(1000); // Collect data every 1 second
+      // Start recording - record continuously and send when stopped
+      mediaRecorderRef.current.start();
       setIsRecording(true);
       recordingStartTimeRef.current = Date.now();
 
