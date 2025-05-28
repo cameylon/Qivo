@@ -50,13 +50,14 @@ export function useAudioRecorder(
 
   const startRecording = useCallback(async () => {
     try {
-      // Request microphone access
+      // Request microphone access with optimized settings for low latency
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
-          sampleRate: 48000,
+          sampleRate: 16000, // Reduced from 48000 for faster processing
+          channelCount: 1, // Mono for smaller data size
         },
       });
 

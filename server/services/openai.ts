@@ -153,23 +153,16 @@ export class OpenAIService {
     try {
       const startTime = Date.now();
 
-      const systemPrompt = `You are a helpful voice assistant. You're having a real-time conversation with a user.
-      
-      Context:
-      - Current emotion detected: ${context.emotion || 'neutral'}
-      - Speaker: ${context.speaker || 'unknown'}
-      - This is part of an ongoing voice conversation
-      
-      Respond naturally and conversationally. Keep responses concise but helpful.
-      Be empathetic to the user's emotional state when appropriate.`;
+      // Simplified system prompt for faster processing
+      const systemPrompt = `You are a helpful voice assistant. Keep responses concise and natural. Current emotion: ${context.emotion || 'neutral'}.`;
 
       const messages: any[] = [
         { role: "system", content: systemPrompt }
       ];
 
-      // Add conversation history if available
+      // Limit conversation history to reduce token count and processing time
       if (context.conversationHistory && context.conversationHistory.length > 0) {
-        context.conversationHistory.slice(-6).forEach((msg, index) => {
+        context.conversationHistory.slice(-4).forEach((msg, index) => {
           messages.push({
             role: index % 2 === 0 ? "user" : "assistant",
             content: msg
@@ -182,8 +175,9 @@ export class OpenAIService {
       const response = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: messages,
-        max_tokens: 150,
-        temperature: 0.7,
+        max_tokens: 100, // Reduced for faster responses
+        temperature: 0.6, // Slightly reduced for more focused responses
+        stream: false, // Ensure we're not using streaming for latency
       });
 
       const processingTime = Date.now() - startTime;
