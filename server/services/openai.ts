@@ -154,16 +154,35 @@ export class OpenAIService {
     try {
       const startTime = Date.now();
 
-      // Simplified system prompt for faster processing
-      const systemPrompt = `You are a helpful voice assistant. Keep responses concise and natural. Current emotion: ${context.emotion || 'neutral'}.`;
+      // Enhanced OpenAI agent system prompt with advanced capabilities
+      const systemPrompt = `You are Qivo, an advanced AI voice assistant powered by OpenAI's intelligent agent capabilities. You excel at:
+
+CONTEXT AWARENESS:
+- Current speaker emotion: ${context.emotion || 'neutral'}
+- Speaker ID: ${context.speaker || 'new user'}
+- Conversation context: Active voice session
+
+RESPONSE GUIDELINES:
+- Be conversational, empathetic, and helpful
+- Adapt your tone to match the user's emotional state
+- Provide concise but meaningful responses
+- Use natural speech patterns suitable for voice interaction
+- Remember context from previous exchanges in this session
+
+CAPABILITIES:
+- Real-time voice processing and understanding
+- Emotional intelligence and adaptive responses
+- Contextual memory within conversations
+- Multi-turn dialogue management`;
 
       const messages: any[] = [
         { role: "system", content: systemPrompt }
       ];
 
-      // Limit conversation history to reduce token count and processing time
+      // Enhanced conversation context with better memory management
       if (context.conversationHistory && context.conversationHistory.length > 0) {
-        context.conversationHistory.slice(-4).forEach((msg, index) => {
+        const recentHistory = context.conversationHistory.slice(-6); // Increased for better context
+        recentHistory.forEach((msg, index) => {
           messages.push({
             role: index % 2 === 0 ? "user" : "assistant",
             content: msg
@@ -174,11 +193,14 @@ export class OpenAIService {
       messages.push({ role: "user", content: transcript });
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // Latest model with agent capabilities
         messages: messages,
-        max_tokens: 100, // Reduced for faster responses
-        temperature: 0.6, // Slightly reduced for more focused responses
-        stream: true, // Enable streaming for real-time token delivery
+        max_tokens: 150, // Increased for more thoughtful responses
+        temperature: 0.7, // Balanced for natural conversation
+        top_p: 0.9, // Enhanced creativity while maintaining focus
+        presence_penalty: 0.1, // Slight penalty to avoid repetition
+        frequency_penalty: 0.1, // Encourage varied vocabulary
+        stream: true,
       });
 
       let fullContent = "";
@@ -211,16 +233,33 @@ export class OpenAIService {
     try {
       const startTime = Date.now();
 
-      // Simplified system prompt for faster processing
-      const systemPrompt = `You are Qivo, a helpful voice assistant. Keep responses concise and natural. Current emotion: ${context.emotion || 'neutral'}.`;
+      // Advanced OpenAI agent prompt for streaming responses
+      const systemPrompt = `You are Qivo, an intelligent AI voice assistant with advanced conversational abilities. 
+
+AGENT BEHAVIOR:
+- Analyze user intent and emotional context deeply
+- Provide adaptive, contextually aware responses
+- Use sophisticated natural language understanding
+- Maintain conversational flow and engagement
+
+CURRENT SESSION:
+- Speaker emotion: ${context.emotion || 'neutral'}
+- Speaker: ${context.speaker || 'unknown'}
+- Mode: Real-time voice conversation
+
+RESPONSE STYLE:
+- Natural, conversational tone
+- Emotionally intelligent responses
+- Concise but meaningful
+- Suitable for voice interaction`;
 
       const messages: any[] = [
         { role: "system", content: systemPrompt }
       ];
 
-      // Limit conversation history to reduce token count and processing time
+      // Enhanced context management for streaming
       if (context.conversationHistory && context.conversationHistory.length > 0) {
-        context.conversationHistory.slice(-3).forEach((msg, index) => {
+        context.conversationHistory.slice(-5).forEach((msg, index) => {
           messages.push({
             role: index % 2 === 0 ? "user" : "assistant",
             content: msg
@@ -233,8 +272,11 @@ export class OpenAIService {
       const stream = await openai.chat.completions.create({
         model: "gpt-4o",
         messages: messages,
-        max_tokens: 80, // Even smaller for ultra-fast responses
-        temperature: 0.6,
+        max_tokens: 120, // Optimized for streaming quality
+        temperature: 0.8, // Enhanced creativity for agent responses
+        top_p: 0.95,
+        presence_penalty: 0.2,
+        frequency_penalty: 0.1,
         stream: true,
       });
 
