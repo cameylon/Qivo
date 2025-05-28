@@ -139,22 +139,11 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Process voice with streaming AI response for ultra-low latency
-      const result = await voiceProcessor.processVoiceMessageWithStreaming(
+      // Process the voice message with optimized settings
+      const result = await voiceProcessor.processVoiceMessage(
         audioBuffer,
         client.sessionId,
-        'webm',
-        (token: string) => {
-          // Stream AI response tokens in real-time
-          this.sendMessage(client.ws, {
-            type: 'response',
-            data: {
-              action: 'ai_token',
-              token: token,
-              timestamp: Date.now(),
-            }
-          });
-        }
+        'webm'
       );
 
       // Send the complete result back to client

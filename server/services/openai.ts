@@ -73,8 +73,9 @@ export class OpenAIService {
       const transcription = await openai.audio.transcriptions.create({
         file: file,
         model: "whisper-1",
-        response_format: "verbose_json",
+        response_format: "json",
         language: "en", // Specify English for better accuracy
+        temperature: 0.0, // Use deterministic transcription for consistency
       });
 
       const processingTime = Date.now() - startTime;
@@ -82,7 +83,7 @@ export class OpenAIService {
       return {
         text: transcription.text,
         confidence: 0.95, // Whisper doesn't provide confidence, using default high value
-        duration: transcription.duration,
+        duration: undefined,
       };
     } catch (error) {
       console.error("Transcription error:", error);
