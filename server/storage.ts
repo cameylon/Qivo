@@ -1,3 +1,6 @@
+import { drizzle } from 'drizzle-orm/neon-http';
+import { neon } from '@neondatabase/serverless';
+import { eq, desc, and } from 'drizzle-orm';
 import { 
   users, 
   voiceSessions,
@@ -18,6 +21,10 @@ import {
   type SystemMetrics,
   type InsertSystemMetrics,
 } from "@shared/schema";
+
+// Initialize database connection
+const sql = neon(process.env.DATABASE_URL!);
+const db = drizzle(sql);
 
 export interface IStorage {
   // Users
@@ -51,189 +58,172 @@ export interface IStorage {
   getLatestSystemMetrics(): Promise<SystemMetrics | undefined>;
 }
 
-export class MemStorage implements IStorage {
-  private users: Map<number, User>;
-  private voiceSessions: Map<number, VoiceSession>;
-  private conversations: Map<number, Conversation>;
-  private emotionAnalyses: Map<number, EmotionAnalysis>;
-  private speakerProfiles: Map<string, SpeakerProfile>;
-  private systemMetrics: Map<number, SystemMetrics>;
-  private currentId: number;
-
+export class DatabaseStorage implements IStorage {
   constructor() {
-    this.users = new Map();
-    this.voiceSessions = new Map();
-    this.conversations = new Map();
-    this.emotionAnalyses = new Map();
-    this.speakerProfiles = new Map();
-    this.systemMetrics = new Map();
-    this.currentId = 1;
-
-    // Initialize with default speaker profiles
     this.initializeDefaultData();
   }
 
-  private initializeDefaultData() {
-    // Create mock speaker profiles
-    const mockProfile: SpeakerProfile = {
-      id: 1,
-      speakerId: "User_001",
-      name: "Demo User",
-      voiceProfile: JSON.stringify({ 
-        pitch: "medium", 
-        tone: "friendly", 
-        accent: "neutral" 
-      }),
-      lastSeen: new Date(),
-      sessionCount: 3,
-      isMock: true,
-    };
-    this.speakerProfiles.set("User_001", mockProfile);
+  private async initializeDefaultData() {
+    try {
+      // Check if demo speaker profile exists
+      const existingProfile = await db.select().from(speakerProfiles).where(eq(speakerProfiles.speakerId, "User_001")).limit(1);
+      
+      if (existingProfile.length === 0) {
+        // Create demo speaker profile
+        await db.insert(speakerProfiles).values({
+          speakerId: "User_001",
+          name: "Demo User",
+          voiceProfile: JSON.stringify({ 
+            pitch: "medium", 
+            tone: "friendly", 
+            accent: "neutral" 
+          }),
+          sessionCount: 3,
+          isMock: true,
+        });
+      }
+    } catch (error) {
+      console.log('Demo data initialization skipped - tables may not exist yet');
+    }
   }
 
   async getUser(id: number): Promise<User | undefined> {
-    return this.users.get(id);
+    const result = await db.select().from(users).where(eq(users.id, id)).limit(1);
+    return result[0];
   }
 
   async getUserByUsername(username: string): Promise<User | undefined> {
-    return Array.from(this.users.values()).find(
-      (user) => user.username === username,
-    );
+    const result = await db.select().from(users).where(eq(users.username, username)).limit(1);
+    return result[0];
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
-    const id = this.currentId++;
-    const user: User = { ...insertUser, id };
-    this.users.set(id, user);
-    return user;
+    const result = await db.insert(users).values(insertUser).returning();
+    return result[0];
   }
 
   async createVoiceSession(insertSession: InsertVoiceSession): Promise<VoiceSession> {
-    const id = this.currentId++;
-    const session: VoiceSession = {
+    const result = await db.insert(voiceSessions).values({
       ...insertSession,
-      id,
-      startTime: new Date(),
-      endTime: null,
-      totalMessages: 0,
-      isActive: true,
-    };
-    this.voiceSessions.set(id, session);
-    return session;
+      userId: insertSession.userId || null,
+      duration: insertSession.duration || null,
+    }).returning();
+    return result[0];
   }
 
   async getVoiceSession(id: number): Promise<VoiceSession | undefined> {
-    return this.voiceSessions.get(id);
+    const result = await db.select().from(voiceSessions).where(eq(voiceSessions.id, id)).limit(1);
+    return result[0];
   }
 
   async updateVoiceSession(id: number, updates: Partial<VoiceSession>): Promise<VoiceSession | undefined> {
-    const session = this.voiceSessions.get(id);
-    if (!session) return undefined;
-    
-    const updatedSession = { ...session, ...updates };
-    this.voiceSessions.set(id, updatedSession);
-    return updatedSession;
+    const result = await db.update(voiceSessions).set(updates).where(eq(voiceSessions.id, id)).returning();
+    return result[0];
   }
 
   async getActiveSession(userId?: number): Promise<VoiceSession | undefined> {
-    return Array.from(this.voiceSessions.values()).find(
-      (session) => session.isActive && (userId ? session.userId === userId : true)
-    );
+    const conditions = [eq(voiceSessions.isActive, true)];
+    
+    if (userId) {
+      conditions.push(eq(voiceSessions.userId, userId));
+    }
+    
+    const result = await db.select().from(voiceSessions).where(and(...conditions)).limit(1);
+    return result[0];
   }
 
   async createConversation(insertConversation: InsertConversation): Promise<Conversation> {
-    const id = this.currentId++;
-    const conversation: Conversation = {
+    const result = await db.insert(conversations).values({
       ...insertConversation,
-      id,
-      timestamp: new Date(),
-    };
-    this.conversations.set(id, conversation);
+      confidence: insertConversation.confidence || null,
+      emotion: insertConversation.emotion || null,
+      speakerId: insertConversation.speakerId || null,
+      processingTime: insertConversation.processingTime || null,
+      audioFormat: insertConversation.audioFormat || null,
+      modelUsed: insertConversation.modelUsed || null,
+    }).returning();
     
-    // Update session message count
-    const session = this.voiceSessions.get(conversation.sessionId);
-    if (session) {
-      session.totalMessages = (session.totalMessages || 0) + 1;
-      this.voiceSessions.set(conversation.sessionId, session);
-    }
+    // Update session message count - simplified approach
+    const messageCount = await db.select().from(conversations).where(eq(conversations.sessionId, insertConversation.sessionId));
+    await db.update(voiceSessions)
+      .set({ totalMessages: messageCount.length })
+      .where(eq(voiceSessions.id, insertConversation.sessionId));
     
-    return conversation;
+    return result[0];
   }
 
   async getConversationsBySession(sessionId: number): Promise<Conversation[]> {
-    return Array.from(this.conversations.values())
-      .filter((conv) => conv.sessionId === sessionId)
-      .sort((a, b) => (a.timestamp?.getTime() || 0) - (b.timestamp?.getTime() || 0));
+    return await db.select().from(conversations)
+      .where(eq(conversations.sessionId, sessionId))
+      .orderBy(conversations.timestamp);
   }
 
   async getRecentConversations(limit = 50): Promise<Conversation[]> {
-    return Array.from(this.conversations.values())
-      .sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0))
-      .slice(0, limit);
+    return await db.select().from(conversations)
+      .orderBy(desc(conversations.timestamp))
+      .limit(limit);
   }
 
   async createEmotionAnalysis(insertAnalysis: InsertEmotionAnalysis): Promise<EmotionAnalysis> {
-    const id = this.currentId++;
-    const analysis: EmotionAnalysis = {
-      ...insertAnalysis,
-      id,
-      timestamp: new Date(),
-    };
-    this.emotionAnalyses.set(id, analysis);
-    return analysis;
+    const result = await db.insert(emotionAnalysis).values(insertAnalysis).returning();
+    return result[0];
   }
 
   async getEmotionAnalysisByConversation(conversationId: number): Promise<EmotionAnalysis | undefined> {
-    return Array.from(this.emotionAnalyses.values()).find(
-      (analysis) => analysis.conversationId === conversationId
-    );
+    const result = await db.select().from(emotionAnalysis)
+      .where(eq(emotionAnalysis.conversationId, conversationId))
+      .limit(1);
+    return result[0];
   }
 
   async createSpeakerProfile(insertProfile: InsertSpeakerProfile): Promise<SpeakerProfile> {
-    const id = this.currentId++;
-    const profile: SpeakerProfile = {
+    const result = await db.insert(speakerProfiles).values({
       ...insertProfile,
-      id,
-      lastSeen: new Date(),
-      sessionCount: 0,
+      name: insertProfile.name || null,
+      voiceProfile: insertProfile.voiceProfile || null,
+      sessionCount: insertProfile.sessionCount || 0,
       isMock: insertProfile.isMock || false,
-    };
-    this.speakerProfiles.set(profile.speakerId, profile);
-    return profile;
+    }).returning();
+    return result[0];
   }
 
   async getSpeakerProfile(speakerId: string): Promise<SpeakerProfile | undefined> {
-    return this.speakerProfiles.get(speakerId);
+    const result = await db.select().from(speakerProfiles)
+      .where(eq(speakerProfiles.speakerId, speakerId))
+      .limit(1);
+    return result[0];
   }
 
   async updateSpeakerProfile(speakerId: string, updates: Partial<SpeakerProfile>): Promise<SpeakerProfile | undefined> {
-    const profile = this.speakerProfiles.get(speakerId);
-    if (!profile) return undefined;
-    
-    const updatedProfile = { ...profile, ...updates };
-    this.speakerProfiles.set(speakerId, updatedProfile);
-    return updatedProfile;
+    const result = await db.update(speakerProfiles)
+      .set(updates)
+      .where(eq(speakerProfiles.speakerId, speakerId))
+      .returning();
+    return result[0];
   }
 
   async getAllSpeakerProfiles(): Promise<SpeakerProfile[]> {
-    return Array.from(this.speakerProfiles.values());
+    return await db.select().from(speakerProfiles);
   }
 
   async createSystemMetrics(insertMetrics: InsertSystemMetrics): Promise<SystemMetrics> {
-    const id = this.currentId++;
-    const metrics: SystemMetrics = {
+    const result = await db.insert(systemMetrics).values({
       ...insertMetrics,
-      id,
-      timestamp: new Date(),
-    };
-    this.systemMetrics.set(id, metrics);
-    return metrics;
+      wsConnections: insertMetrics.wsConnections || 0,
+      avgResponseTime: insertMetrics.avgResponseTime || null,
+      transcriptionAccuracy: insertMetrics.transcriptionAccuracy || null,
+      systemHealth: insertMetrics.systemHealth || 'operational',
+      uptime: insertMetrics.uptime || null,
+    }).returning();
+    return result[0];
   }
 
   async getLatestSystemMetrics(): Promise<SystemMetrics | undefined> {
-    const metrics = Array.from(this.systemMetrics.values());
-    return metrics.sort((a, b) => (b.timestamp?.getTime() || 0) - (a.timestamp?.getTime() || 0))[0];
+    const result = await db.select().from(systemMetrics)
+      .orderBy(desc(systemMetrics.timestamp))
+      .limit(1);
+    return result[0];
   }
 }
 
-export const storage = new MemStorage();
+export const storage = new DatabaseStorage();
