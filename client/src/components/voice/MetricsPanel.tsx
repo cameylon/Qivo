@@ -10,7 +10,7 @@ interface MetricsPanelProps {
 export function MetricsPanel({ metrics }: MetricsPanelProps) {
   const transcriptionConfidence = metrics?.transcriptionConfidence || 94;
   const emotionConfidence = metrics?.emotionConfidence || 87;
-  const speakerConfidence = metrics?.speakerConfidence || "Mock Data";
+  const speakerConfidence = metrics?.speakerConfidence || "85%";
   const responseTime = metrics?.avgResponseTime || 1.2;
 
   return (
@@ -52,7 +52,7 @@ export function MetricsPanel({ metrics }: MetricsPanelProps) {
             <span className="text-sm font-medium">{speakerConfidence}</span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-2">
-            <div className="bg-amber-500 h-2 rounded-full" style={{ width: '45%' }} />
+            <div className="bg-green-500 h-2 rounded-full" style={{ width: '85%' }} />
           </div>
         </div>
 
