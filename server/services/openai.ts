@@ -63,7 +63,7 @@ export class OpenAIService {
         filename = "audio.webm";
       }
       
-      console.log(`Processing audio: ${filename}, size: ${audioBuffer.length} bytes, format: ${format}`);
+      console.log(`🎤 Processing audio: ${filename}, size: ${audioBuffer.length} bytes, format: ${format}`);
       
       // Create the file object for OpenAI
       const file = new File([audioBuffer], filename, { 
