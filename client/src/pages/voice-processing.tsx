@@ -64,7 +64,7 @@ export default function VoiceProcessing() {
     } catch (error) {
       toast({
         title: "Session Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to start session",
         variant: "destructive",
       });
     }
@@ -85,7 +85,7 @@ export default function VoiceProcessing() {
     } catch (error) {
       toast({
         title: "Session Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to end session",
         variant: "destructive",
       });
     }
@@ -105,7 +105,7 @@ export default function VoiceProcessing() {
     } catch (error) {
       toast({
         title: "Recording Error",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Failed to start recording",
         variant: "destructive",
       });
     }
@@ -219,7 +219,7 @@ export default function VoiceProcessing() {
                 isSessionActive={isSessionActive}
               />
               <AnalysisPanel
-                currentEmotion={messages[messages.length - 1]?.emotion}
+                currentEmotion={undefined}
                 currentSpeaker={messages[messages.length - 1]?.speaker}
               />
             </div>
