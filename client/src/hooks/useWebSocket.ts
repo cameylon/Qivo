@@ -181,7 +181,15 @@ export function useWebSocket(): UseWebSocketReturn {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       const dataSize = typeof data === 'string' ? data.length : data.byteLength;
       console.log(`Sending WebSocket message: ${dataSize} bytes, type: ${typeof data}`);
+      
+      // Debug: Log data type and first few bytes for binary data
+      if (data instanceof ArrayBuffer) {
+        const uint8View = new Uint8Array(data.slice(0, 20));
+        console.log(`ArrayBuffer preview:`, Array.from(uint8View));
+      }
+      
       wsRef.current.send(data);
+      console.log(`Message sent successfully via WebSocket`);
     } else {
       console.error('WebSocket is not connected');
       throw new Error('WebSocket is not connected');
