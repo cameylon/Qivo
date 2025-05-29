@@ -103,12 +103,13 @@ export class OpenAIService {
     } catch (error) {
       console.error("Transcription error details:", error);
       
-      if (error.message?.includes('API key')) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('API key')) {
         throw new Error("OpenAI API key issue - please check your API key configuration");
-      } else if (error.message?.includes('Invalid audio')) {
+      } else if (errorMessage.includes('Invalid audio')) {
         throw new Error("Audio format not supported - please try a different recording");
       } else {
-        throw new Error(`Transcription failed: ${error.message}`);
+        throw new Error(`Transcription failed: ${errorMessage}`);
       }
     }
   }
@@ -243,7 +244,8 @@ CAPABILITIES:
       };
     } catch (error) {
       console.error("Response generation error:", error);
-      throw new Error(`Failed to generate AI response: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to generate AI response: ${errorMessage}`);
     }
   }
 
@@ -322,7 +324,8 @@ RESPONSE STYLE:
 
     } catch (error) {
       console.error("Streaming response error:", error);
-      throw new Error(`Failed to generate streaming AI response: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Failed to generate streaming AI response: ${errorMessage}`);
     }
   }
 
@@ -357,12 +360,13 @@ RESPONSE STYLE:
     } catch (error) {
       console.error("Text-to-speech error:", error);
       
-      if (error.message?.includes('API key')) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      if (errorMessage.includes('API key')) {
         throw new Error("OpenAI API key issue - please check your API key configuration");
-      } else if (error.message?.includes('quota')) {
+      } else if (errorMessage.includes('quota')) {
         throw new Error("OpenAI quota exceeded - please check your account limits");
       } else {
-        throw new Error(`Speech generation failed: ${error.message}`);
+        throw new Error(`Speech generation failed: ${errorMessage}`);
       }
     }
   }

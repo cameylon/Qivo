@@ -149,7 +149,8 @@ export class VoiceProcessor {
 
     } catch (error) {
       console.error("Voice processing error:", error);
-      throw new Error(`Voice processing failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Voice processing failed: ${errorMessage}`);
     }
   }
 
@@ -388,7 +389,8 @@ export class VoiceProcessor {
 
     } catch (error) {
       console.error("Streaming voice processing error:", error);
-      throw new Error(`Streaming voice processing failed: ${error.message}`);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      throw new Error(`Streaming voice processing failed: ${errorMessage}`);
     }
   }
 
