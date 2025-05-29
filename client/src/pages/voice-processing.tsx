@@ -23,6 +23,7 @@ export default function VoiceProcessing() {
     sendMessage,
     startSession,
     endSession,
+    wsRef,
   } = useWebSocket();
 
   const {

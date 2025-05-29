@@ -22,6 +22,7 @@ interface UseWebSocketReturn {
   sendMessage: (data: string | ArrayBuffer | Uint8Array) => void;
   startSession: () => Promise<number>;
   endSession: () => Promise<void>;
+  wsRef: React.MutableRefObject<WebSocket | null>;
 }
 
 export function useWebSocket(): UseWebSocketReturn {
@@ -268,5 +269,6 @@ export function useWebSocket(): UseWebSocketReturn {
     sendMessage,
     startSession,
     endSession,
+    wsRef,
   };
 }
