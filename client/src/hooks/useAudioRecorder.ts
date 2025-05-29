@@ -134,9 +134,9 @@ export function useAudioRecorder(
 
       // Start recording with smaller time slices for lower latency
       console.log('Starting MediaRecorder...');
-      mediaRecorderRef.current.start(1500); // 1.5-second chunks for faster processing
+      mediaRecorderRef.current.start(1000); // 1-second chunks for real-time processing
       setIsRecording(true);
-      console.log('Recording state set to true');
+      console.log('Recording state set to true, MediaRecorder state:', mediaRecorderRef.current.state);
       recordingStartTimeRef.current = Date.now();
 
       // Start duration tracking
