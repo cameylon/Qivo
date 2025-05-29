@@ -40,14 +40,7 @@ export default function VoiceProcessing() {
       // Convert blob to ArrayBuffer and send as binary data
       audioBlob.arrayBuffer().then((buffer) => {
         console.log(`Transmitting audio: ${buffer.byteLength} bytes`);
-        
-        // Send raw binary data directly
-        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-          wsRef.current.send(buffer);
-          console.log(`Audio sent via WebSocket: ${buffer.byteLength} bytes`);
-        } else {
-          console.error('WebSocket not ready for audio transmission');
-        }
+        sendMessage(buffer);
       }).catch((error) => {
         console.error('Audio conversion failed:', error);
       });
