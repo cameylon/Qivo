@@ -92,17 +92,23 @@ export default function VoiceProcessing() {
   };
 
   const handleStartRecording = async () => {
+    console.log('=== Starting Audio Recording Test ===');
+    
     if (!isSessionActive) {
+      console.log('Starting session first...');
       await handleStartSession();
     }
     
     try {
+      console.log('Attempting to start recording...');
       await startRecording();
+      console.log('Recording started successfully');
       toast({
         title: "Recording Started",
         description: "Now listening for voice input",
       });
     } catch (error) {
+      console.error('Recording failed:', error);
       toast({
         title: "Recording Error",
         description: error instanceof Error ? error.message : "Failed to start recording",

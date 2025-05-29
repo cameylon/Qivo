@@ -51,17 +51,18 @@ export function useAudioRecorder(
   const startRecording = useCallback(async () => {
     try {
       console.log('Requesting microphone access...');
-      // Request microphone access with optimized settings for low latency
+      
+      // Check if getUserMedia is available
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('getUserMedia is not supported in this browser');
+      }
+
+      // Request microphone access with simpler constraints for better compatibility
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true,
-          sampleRate: 16000, // Reduced from 48000 for faster processing
-          channelCount: 1, // Mono for smaller data size
-        },
+        audio: true
       });
       console.log('Microphone access granted, stream active:', stream.active);
+      console.log('Audio tracks:', stream.getAudioTracks().length);
 
       streamRef.current = stream;
 
@@ -77,18 +78,24 @@ export function useAudioRecorder(
       source.connect(analyserRef.current);
 
       // Set up MediaRecorder with optimal settings
-      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
-        ? 'audio/webm;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm')
-        ? 'audio/webm'
-        : MediaRecorder.isTypeSupported('audio/mp4')
-        ? 'audio/mp4'
-        : 'audio/wav';
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+        mimeType = 'audio/webm;codecs=opus';
+      } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = 'audio/webm';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      } else {
+        console.warn('No preferred audio formats supported, using default');
+      }
+
+      console.log('Selected audio format:', mimeType);
 
       mediaRecorderRef.current = new MediaRecorder(stream, {
         mimeType,
-        audioBitsPerSecond: 128000, // 128 kbps for good quality
+        audioBitsPerSecond: 64000, // Lower bitrate for better compatibility
       });
+      console.log('MediaRecorder created with state:', mediaRecorderRef.current.state);
 
       audioChunksRef.current = [];
 
@@ -98,11 +105,9 @@ export function useAudioRecorder(
           audioChunksRef.current.push(event.data);
           
           // Send audio chunks immediately for real-time transcription
-          if (onAudioData && event.data.size > 1024) {
-            console.log(`Real-time audio chunk: ${event.data.size} bytes`);
+          if (onAudioData) {
+            console.log(`Sending audio chunk: ${event.data.size} bytes`);
             onAudioData(event.data);
-          } else if (event.data.size > 0) {
-            console.log(`Audio chunk too small: ${event.data.size} bytes, will accumulate`);
           }
         } else {
           console.warn('Received empty audio data from MediaRecorder');
