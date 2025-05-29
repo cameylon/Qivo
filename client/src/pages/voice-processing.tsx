@@ -4,6 +4,7 @@ import { AudioVisualizer } from "@/components/voice/AudioVisualizer";
 import { ConversationPanel } from "@/components/voice/ConversationPanel";
 import { MetricsPanel } from "@/components/voice/MetricsPanel";
 import { AnalysisPanel } from "@/components/voice/AnalysisPanel";
+import { AudioTest } from "@/components/voice/AudioTest";
 import { useWebSocket } from "@/hooks/useWebSocket";
 import { useWorkingAudioRecorder } from "@/hooks/useWorkingAudioRecorder";
 import { Button } from "@/components/ui/button";
@@ -210,6 +211,7 @@ export default function VoiceProcessing() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full">
             {/* Left Column: Audio Input & Metrics */}
             <div className="lg:col-span-1 space-y-6">
+              <AudioTest />
               <AudioVisualizer
                 isRecording={isRecording}
                 audioLevel={audioLevel}
