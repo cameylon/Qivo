@@ -108,8 +108,8 @@ export function useAudioRecorder({
         }
       };
 
-      // Start recording
-      mediaRecorder.start(1000); // Collect data every second
+      // Start recording - collect data in smaller chunks for real-time processing
+      mediaRecorder.start(250); // Collect data every 250ms for better real-time performance
       setIsRecording(true);
       startTimeRef.current = Date.now();
       
