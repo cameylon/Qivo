@@ -166,6 +166,34 @@ export function useWebSocket(): UseWebSocketReturn {
           model: 'gpt-4o',
         }]);
 
+        // Play TTS audio if available
+        if (data.aiAudio && data.aiAudio.audioData) {
+          try {
+            const audioBytes = atob(data.aiAudio.audioData);
+            const audioArray = new Uint8Array(audioBytes.length);
+            for (let i = 0; i < audioBytes.length; i++) {
+              audioArray[i] = audioBytes.charCodeAt(i);
+            }
+            
+            const audioBlob = new Blob([audioArray], { type: `audio/${data.aiAudio.format}` });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const audio = new Audio(audioUrl);
+            
+            audio.play().then(() => {
+              console.log('Playing AI response audio');
+            }).catch(error => {
+              console.warn('Failed to play AI audio:', error);
+            });
+            
+            // Clean up URL after playing
+            audio.onended = () => {
+              URL.revokeObjectURL(audioUrl);
+            };
+          } catch (error) {
+            console.warn('Failed to process AI audio:', error);
+          }
+        }
+
         // Update metrics
         setMetrics({
           transcriptionConfidence: Math.round(data.confidence * 100),
