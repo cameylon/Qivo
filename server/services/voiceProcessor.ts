@@ -1,4 +1,4 @@
-import { openaiService, type EmotionAnalysisResult } from './openai';
+import { openaiService, type EmotionAnalysisResult, type TTSResult } from './openai';
 import { storage } from '../storage';
 import type { Conversation, InsertConversation, InsertEmotionAnalysis, SpeakerProfile } from '@shared/schema';
 
@@ -8,6 +8,7 @@ export interface VoiceProcessingResult {
   emotion: EmotionAnalysisResult;
   speaker: SpeakerProfile;
   aiResponse: string;
+  aiAudio?: TTSResult;
   conversation: Conversation;
   processingTime: number;
 }
@@ -104,6 +105,16 @@ export class VoiceProcessor {
           confidence: emotionResult.confidence,
         }).catch(err => console.warn('Failed to store emotion analysis:', err)),
       ]);
+
+      // Generate speech for AI response
+      let aiAudio: TTSResult | undefined;
+      try {
+        aiAudio = await openaiService.generateSpeech(aiResponse.content, 'nova');
+        console.log(`Generated speech audio: ${aiAudio.audioBuffer.length} bytes`);
+      } catch (error) {
+        console.warn('Failed to generate speech audio:', error instanceof Error ? error.message : 'Unknown error');
+        // Continue without audio - text response will still be available
+      }
 
       // Store AI response in background after sending response to client
       setImmediate(async () => {

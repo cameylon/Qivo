@@ -28,6 +28,13 @@ export interface AIResponse {
   processingTime: number;
 }
 
+export interface TTSResult {
+  audioBuffer: Buffer;
+  format: string;
+  duration?: number;
+  processingTime: number;
+}
+
 export class OpenAIService {
   async transcribeAudio(audioBuffer: Buffer, format: string = "webm"): Promise<TranscriptionResult> {
     try {
@@ -316,6 +323,47 @@ RESPONSE STYLE:
     } catch (error) {
       console.error("Streaming response error:", error);
       throw new Error(`Failed to generate streaming AI response: ${error.message}`);
+    }
+  }
+
+  async generateSpeech(text: string, voice: 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer' = 'nova'): Promise<TTSResult> {
+    try {
+      const startTime = Date.now();
+      
+      if (!text || text.trim().length === 0) {
+        throw new Error("No text provided for speech synthesis");
+      }
+
+      console.log(`Generating speech for text: "${text.substring(0, 100)}..." using voice: ${voice}`);
+
+      const mp3 = await openai.audio.speech.create({
+        model: "tts-1", // Use tts-1 for faster processing, tts-1-hd for higher quality
+        voice: voice,
+        input: text,
+        response_format: "mp3",
+        speed: 1.0,
+      });
+
+      const buffer = Buffer.from(await mp3.arrayBuffer());
+      const processingTime = Date.now() - startTime;
+
+      console.log(`Speech generation completed: ${buffer.length} bytes, ${processingTime}ms`);
+
+      return {
+        audioBuffer: buffer,
+        format: "mp3",
+        processingTime,
+      };
+    } catch (error) {
+      console.error("Text-to-speech error:", error);
+      
+      if (error.message?.includes('API key')) {
+        throw new Error("OpenAI API key issue - please check your API key configuration");
+      } else if (error.message?.includes('quota')) {
+        throw new Error("OpenAI quota exceeded - please check your account limits");
+      } else {
+        throw new Error(`Speech generation failed: ${error.message}`);
+      }
     }
   }
 }
