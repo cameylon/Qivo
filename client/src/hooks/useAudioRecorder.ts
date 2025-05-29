@@ -50,6 +50,7 @@ export function useAudioRecorder(
 
   const startRecording = useCallback(async () => {
     try {
+      console.log('Requesting microphone access...');
       // Request microphone access with optimized settings for low latency
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -60,6 +61,7 @@ export function useAudioRecorder(
           channelCount: 1, // Mono for smaller data size
         },
       });
+      console.log('Microphone access granted, stream active:', stream.active);
 
       streamRef.current = stream;
 
@@ -91,6 +93,7 @@ export function useAudioRecorder(
       audioChunksRef.current = [];
 
       mediaRecorderRef.current.ondataavailable = (event) => {
+        console.log(`MediaRecorder data available: ${event.data.size} bytes, type: ${event.data.type}`);
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
           
@@ -98,7 +101,11 @@ export function useAudioRecorder(
           if (onAudioData && event.data.size > 1024) {
             console.log(`Real-time audio chunk: ${event.data.size} bytes`);
             onAudioData(event.data);
+          } else if (event.data.size > 0) {
+            console.log(`Audio chunk too small: ${event.data.size} bytes, will accumulate`);
           }
+        } else {
+          console.warn('Received empty audio data from MediaRecorder');
         }
       };
 
@@ -111,9 +118,20 @@ export function useAudioRecorder(
         }
       };
 
+      // Add event listeners for MediaRecorder state changes
+      mediaRecorderRef.current.onstart = () => {
+        console.log('MediaRecorder started');
+      };
+      
+      mediaRecorderRef.current.onerror = (event) => {
+        console.error('MediaRecorder error:', event);
+      };
+
       // Start recording with smaller time slices for lower latency
+      console.log('Starting MediaRecorder...');
       mediaRecorderRef.current.start(1500); // 1.5-second chunks for faster processing
       setIsRecording(true);
+      console.log('Recording state set to true');
       recordingStartTimeRef.current = Date.now();
 
       // Start duration tracking
