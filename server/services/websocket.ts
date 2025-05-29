@@ -198,6 +198,11 @@ export class VoiceWebSocketServer {
             isMock: false,
           },
           aiResponse: result.aiResponse,
+          aiAudio: result.aiAudio ? {
+            audioData: result.aiAudio.audioBuffer.toString('base64'),
+            format: result.aiAudio.format,
+            processingTime: result.aiAudio.processingTime
+          } : null,
           processingTime: result.processingTime,
           timestamp: Date.now(),
         }
