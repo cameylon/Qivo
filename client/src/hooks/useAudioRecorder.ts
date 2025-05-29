@@ -1,211 +1,167 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
+
+interface UseAudioRecorderProps {
+  onAudioData?: (audioBlob: Blob) => void;
+  onError?: (error: string) => void;
+}
 
 interface UseAudioRecorderReturn {
   isRecording: boolean;
   audioLevel: number;
+  recordingDuration: number;
   startRecording: () => Promise<void>;
   stopRecording: () => void;
-  recordingDuration: number;
-  audioFormat: string;
+  error: string | null;
 }
 
-export function useAudioRecorder(
-  onAudioData?: (audioBlob: Blob) => void
-): UseAudioRecorderReturn {
+export function useAudioRecorder({ 
+  onAudioData, 
+  onError 
+}: UseAudioRecorderProps = {}): UseAudioRecorderReturn {
   const [isRecording, setIsRecording] = useState(false);
   const [audioLevel, setAudioLevel] = useState(0);
   const [recordingDuration, setRecordingDuration] = useState(0);
-  
+  const [error, setError] = useState<string | null>(null);
+
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
-  const animationFrameRef = useRef<number | null>(null);
-  const recordingStartTimeRef = useRef<number | null>(null);
-  const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const animationFrameRef = useRef<number>();
+  const startTimeRef = useRef<number>(0);
+  const durationIntervalRef = useRef<NodeJS.Timeout>();
 
-  const audioFormat = 'webm'; // Default format
+  const updateAudioLevel = useCallback(() => {
+    if (!analyserRef.current) return;
 
-  const analyzeAudio = useCallback(() => {
-    if (!analyserRef.current || !dataArrayRef.current) return;
-
-    analyserRef.current.getByteFrequencyData(dataArrayRef.current);
+    const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
+    analyserRef.current.getByteFrequencyData(dataArray);
     
-    // Calculate average audio level
-    let sum = 0;
-    for (let i = 0; i < dataArrayRef.current.length; i++) {
-      sum += dataArrayRef.current[i];
-    }
-    const average = sum / dataArrayRef.current.length;
-    const normalizedLevel = average / 255;
+    const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
+    const normalizedLevel = Math.min(100, (average / 255) * 100);
     
     setAudioLevel(normalizedLevel);
-
+    
     if (isRecording) {
-      animationFrameRef.current = requestAnimationFrame(analyzeAudio);
+      animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
     }
   }, [isRecording]);
 
   const startRecording = useCallback(async () => {
     try {
-      console.log('Starting audio recording...');
+      setError(null);
       
       // Check browser support
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('Audio recording not supported in this browser');
+        throw new Error('Browser does not support audio recording');
       }
 
-      if (typeof MediaRecorder === 'undefined') {
-        throw new Error('MediaRecorder not supported in this browser');
-      }
-
-      // Request microphone access
+      // Get user media
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
           autoGainControl: true,
+          sampleRate: 16000,
         }
       });
-      
-      console.log('Microphone access granted');
-      console.log('Stream active:', stream.active);
-      console.log('Audio tracks:', stream.getAudioTracks().length);
 
       streamRef.current = stream;
 
-      // Set up audio analysis
-      audioContextRef.current = new AudioContext({ sampleRate: 48000 });
-      const source = audioContextRef.current.createMediaStreamSource(stream);
-      analyserRef.current = audioContextRef.current.createAnalyser();
-      analyserRef.current.fftSize = 256;
+      // Set up audio context for level monitoring
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioContextRef.current = audioContext;
       
-      const bufferLength = analyserRef.current.frequencyBinCount;
-      dataArrayRef.current = new Uint8Array(bufferLength);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyserRef.current = analyser;
       
-      source.connect(analyserRef.current);
+      const source = audioContext.createMediaStreamSource(stream);
+      source.connect(analyser);
 
-      // Determine the best supported audio format
-      let mimeType = '';
-      const supportedTypes = [
-        'audio/webm;codecs=opus',
-        'audio/webm',
-        'audio/mp4',
-        'audio/ogg',
-        'audio/wav'
-      ];
+      // Set up MediaRecorder
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+        ? 'audio/webm'
+        : 'audio/mp4';
 
-      for (const type of supportedTypes) {
-        if (MediaRecorder.isTypeSupported(type)) {
-          mimeType = type;
-          break;
-        }
-      }
-
-      if (!mimeType) {
-        mimeType = 'audio/webm'; // fallback
-        console.warn('No supported audio format found, using fallback');
-      }
-
-      console.log('Using audio format:', mimeType);
-
-      // Create MediaRecorder with minimal options for maximum compatibility
-      const options: MediaRecorderOptions = { mimeType };
+      const mediaRecorder = new MediaRecorder(stream, { 
+        mimeType,
+        audioBitsPerSecond: 16000 
+      });
       
-      mediaRecorderRef.current = new MediaRecorder(stream, options);
-      audioChunksRef.current = [];
+      mediaRecorderRef.current = mediaRecorder;
 
-      // Set up event handlers
-      mediaRecorderRef.current.ondataavailable = (event) => {
-        console.log(`Audio data available: ${event.data.size} bytes`);
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-          
-          // Send each chunk immediately for real-time processing
-          if (onAudioData) {
-            console.log(`Sending audio chunk: ${event.data.size} bytes`);
-            onAudioData(event.data);
-          }
+          audioChunks.push(event.data);
         }
       };
 
-      mediaRecorderRef.current.onstart = () => {
-        console.log('MediaRecorder started successfully');
-      };
-
-      mediaRecorderRef.current.onstop = () => {
-        console.log('MediaRecorder stopped');
-        // Send final combined blob if we have chunks
-        if (audioChunksRef.current.length > 0 && onAudioData) {
-          const finalBlob = new Blob(audioChunksRef.current, { type: mimeType });
-          console.log(`Sending final audio blob: ${finalBlob.size} bytes`);
-          onAudioData(finalBlob);
+      mediaRecorder.onstop = () => {
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
+        if (audioBlob.size > 0 && onAudioData) {
+          onAudioData(audioBlob);
         }
       };
 
-      mediaRecorderRef.current.onerror = (event) => {
-        console.error('MediaRecorder error:', event);
-      };
-
-      // Start recording with frequent data events
-      console.log('Starting recording...');
-      mediaRecorderRef.current.start(500); // 500ms chunks for responsive real-time processing
+      // Start recording
+      mediaRecorder.start(1000); // Collect data every second
       setIsRecording(true);
-      recordingStartTimeRef.current = Date.now();
-
+      startTimeRef.current = Date.now();
+      
       // Start duration tracking
       durationIntervalRef.current = setInterval(() => {
-        if (recordingStartTimeRef.current) {
-          const elapsed = Math.floor((Date.now() - recordingStartTimeRef.current) / 1000);
-          setRecordingDuration(elapsed);
-        }
+        setRecordingDuration(Math.floor((Date.now() - startTimeRef.current) / 1000));
       }, 1000);
+      
+      // Start audio level monitoring
+      updateAudioLevel();
 
-      // Start audio analysis
-      analyzeAudio();
-
-    } catch (error) {
-      console.error('Failed to start recording:', error);
-      throw new Error(`Failed to access microphone: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to start recording';
+      setError(errorMessage);
+      if (onError) onError(errorMessage);
+      console.error('Recording error:', err);
     }
-  }, [onAudioData, analyzeAudio]);
+  }, [onAudioData, onError, updateAudioLevel]);
 
   const stopRecording = useCallback(() => {
-    setIsRecording(false);
-
-    // Stop MediaRecorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+    if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
+      setIsRecording(false);
     }
 
-    // Stop audio analysis
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-      animationFrameRef.current = null;
-    }
-
-    // Stop duration tracking
+    // Clean up duration tracking
     if (durationIntervalRef.current) {
       clearInterval(durationIntervalRef.current);
-      durationIntervalRef.current = null;
     }
+    setRecordingDuration(0);
 
-    // Clean up audio context
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
+    // Clean up audio level monitoring
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
     }
+    setAudioLevel(0);
 
-    // Stop media stream
+    // Clean up media stream
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
 
-    setAudioLevel(0);
-  }, []);
+    // Clean up audio context
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    mediaRecorderRef.current = null;
+    analyserRef.current = null;
+  }, [isRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -217,9 +173,9 @@ export function useAudioRecorder(
   return {
     isRecording,
     audioLevel,
+    recordingDuration,
     startRecording,
     stopRecording,
-    recordingDuration,
-    audioFormat,
+    error,
   };
 }
