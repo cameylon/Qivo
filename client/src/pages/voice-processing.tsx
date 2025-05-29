@@ -35,9 +35,12 @@ export default function VoiceProcessing() {
   } = useAudioRecorder((audioBlob) => {
     if (sessionId && isConnected && audioBlob.size > 1024) {
       // Only send audio if it's large enough and we have an active session
-      console.log(`Sending audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      console.log(`Converting audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       audioBlob.arrayBuffer().then((buffer) => {
-        sendMessage(new Uint8Array(buffer));
+        console.log(`Sending audio buffer: ${buffer.byteLength} bytes`);
+        sendMessage(buffer);
+      }).catch((error) => {
+        console.error('Error converting audio blob to buffer:', error);
       });
     }
   });
