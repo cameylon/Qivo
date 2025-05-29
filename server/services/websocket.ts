@@ -129,6 +129,8 @@ export class VoiceWebSocketServer {
       return;
     }
 
+    console.log(`Processing audio for client ${clientId}: ${audioBuffer.length} bytes`);
+
     try {
       // Send immediate acknowledgment for low latency feel
       this.sendMessage(client.ws, {
@@ -140,11 +142,24 @@ export class VoiceWebSocketServer {
       });
 
       // Process the voice message with optimized settings
+      console.log(`Starting voice processing for session ${client.sessionId}`);
       const result = await voiceProcessor.processVoiceMessage(
         audioBuffer,
         client.sessionId,
         'webm'
       );
+      console.log(`Voice processing completed: "${result.transcript}"`);
+
+      // Send transcript immediately to client for real-time feedback
+      this.sendMessage(client.ws, {
+        type: 'response',
+        data: {
+          action: 'transcript_ready',
+          transcript: result.transcript,
+          confidence: result.confidence,
+          timestamp: Date.now(),
+        }
+      });
 
       // Send the complete result back to client
       this.sendMessage(client.ws, {
