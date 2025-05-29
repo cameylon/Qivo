@@ -89,7 +89,7 @@ export class VoiceWebSocketServer {
     console.log(`Received message from ${clientId}: ${data.length} bytes`);
 
     // Check if this is likely binary audio data (larger size indicates audio)
-    if (data.length > 1000) {
+    if (data.length > 100) {
       console.log(`🎵 AUDIO DATA RECEIVED: ${data.length} bytes - Processing for transcription...`);
       await this.handleAudioData(clientId, data);
       return;
