@@ -178,6 +178,8 @@ export function useWebSocket(): UseWebSocketReturn {
 
   const sendMessage = useCallback((data: string | ArrayBuffer | Uint8Array) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      const dataSize = typeof data === 'string' ? data.length : data.byteLength;
+      console.log(`Sending WebSocket message: ${dataSize} bytes, type: ${typeof data}`);
       wsRef.current.send(data);
     } else {
       console.error('WebSocket is not connected');

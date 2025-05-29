@@ -77,6 +77,13 @@ export class VoiceWebSocketServer {
 
     console.log(`Received message from ${clientId}: ${data.length} bytes`);
 
+    // Check if this is likely binary audio data (larger size indicates audio)
+    if (data.length > 1000) {
+      console.log(`Processing audio data: ${data.length} bytes`);
+      await this.handleAudioData(clientId, data);
+      return;
+    }
+
     try {
       // Try to parse as JSON for control messages
       const textData = data.toString();
@@ -85,8 +92,8 @@ export class VoiceWebSocketServer {
       console.log(`Control message: ${message.type}`);
       await this.handleControlMessage(clientId, message);
     } catch (jsonError) {
-      // If JSON parsing fails, treat as binary audio data
-      console.log(`Processing audio data: ${data.length} bytes`);
+      // If JSON parsing fails and it's small data, might still be audio
+      console.log(`Processing small audio data: ${data.length} bytes`);
       await this.handleAudioData(clientId, data);
     }
   }
@@ -136,25 +143,25 @@ export class VoiceWebSocketServer {
     console.log(`Processing audio for client ${clientId}: ${audioBuffer.length} bytes`);
 
     try {
-      // Send immediate acknowledgment for low latency feel
+      // Send immediate acknowledgment
       this.sendMessage(client.ws, {
         type: 'response',
         data: {
           action: 'processing',
-          message: 'Processing audio...',
+          message: 'Transcribing audio...',
         }
       });
 
-      // Process the voice message with optimized settings
-      console.log(`Starting voice processing for session ${client.sessionId}`);
+      // Process the voice message for real-time transcription
+      console.log(`Starting real-time voice processing for session ${client.sessionId}`);
       const result = await voiceProcessor.processVoiceMessage(
         audioBuffer,
         client.sessionId,
         'webm'
       );
-      console.log(`Voice processing completed: "${result.transcript}"`);
+      console.log(`Real-time transcription completed: "${result.transcript}"`);
 
-      // Send transcript immediately to client for real-time feedback
+      // Send transcript immediately for real-time display
       this.sendMessage(client.ws, {
         type: 'response',
         data: {
