@@ -5,7 +5,7 @@ import { ConversationPanel } from "@/components/voice/ConversationPanel";
 import { MetricsPanel } from "@/components/voice/MetricsPanel";
 import { AnalysisPanel } from "@/components/voice/AnalysisPanel";
 import { useWebSocket } from "@/hooks/useWebSocket";
-import { useAudioRecorder } from "@/hooks/useAudioRecorder";
+import { useSimpleAudioRecorder } from "@/hooks/useSimpleAudioRecorder";
 import { Button } from "@/components/ui/button";
 import { Mic, Square, Download } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -31,9 +31,7 @@ export default function VoiceProcessing() {
     audioLevel,
     startRecording,
     stopRecording,
-    recordingDuration,
-    audioFormat,
-  } = useAudioRecorder((audioBlob) => {
+  } = useSimpleAudioRecorder((audioBlob) => {
     if (sessionId && isConnected && audioBlob.size > 0) {
       console.log(`Processing audio chunk: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       
@@ -214,8 +212,8 @@ export default function VoiceProcessing() {
               <AudioVisualizer
                 isRecording={isRecording}
                 audioLevel={audioLevel}
-                duration={recordingDuration}
-                audioFormat={audioFormat}
+                duration={0}
+                audioFormat="webm"
               />
               <MetricsPanel metrics={metrics} />
             </div>
