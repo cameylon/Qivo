@@ -129,7 +129,7 @@ export function useAudioRecorder(
 
     } catch (error) {
       console.error('Failed to start recording:', error);
-      throw new Error(`Failed to access microphone: ${error.message}`);
+      throw new Error(`Failed to access microphone: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }, [onAudioData, analyzeAudio]);
 

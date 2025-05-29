@@ -79,7 +79,7 @@ export class AudioUtils {
   } {
     return {
       mediaRecorder: typeof MediaRecorder !== 'undefined',
-      audioContext: typeof AudioContext !== 'undefined' || typeof webkitAudioContext !== 'undefined',
+      audioContext: typeof AudioContext !== 'undefined' || typeof (window as any).webkitAudioContext !== 'undefined',
       getUserMedia: !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
       webSocket: typeof WebSocket !== 'undefined',
     };
