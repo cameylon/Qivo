@@ -79,6 +79,7 @@ export default function VoiceProcessing() {
     emotionConfidence: 0,
     avgResponseTime: 0
   });
+  const [emotionData, setEmotionData] = useState<any>(null);
 
   // Refs
   const wsRef = useRef<WebSocket | null>(null);
@@ -158,6 +159,11 @@ export default function VoiceProcessing() {
           processingTime: data.processingTime,
           model: 'gpt-4o',
         }]);
+        
+        // Set emotion data for visualization
+        if (data.emotion) {
+          setEmotionData(data.emotion);
+        }
         
         setMetrics({
           transcriptionConfidence: Math.round(data.confidence * 100),
@@ -488,12 +494,43 @@ export default function VoiceProcessing() {
 
           {/* Analytics Panel */}
           <div className="space-y-6">
+            {/* Comprehensive Data Visualization Dashboard */}
+            {emotionData && (
+              <DataVisualization 
+                emotions={emotionData.emotions}
+                sentiment={emotionData.sentiment}
+                sentimentScore={emotionData.sentimentScore}
+                emotionalIntensity={emotionData.emotionalIntensity}
+                confidence={emotionData.confidence}
+                psychologicalInsights={emotionData.psychologicalInsights}
+                contextualFactors={emotionData.contextualFactors}
+                transcriptionConfidence={95}
+                avgResponseTime={metrics.avgResponseTime}
+                messageCount={messages.length}
+              />
+            )}
+
+            {/* Detailed Emotional Analysis */}
+            {emotionData && (
+              <EmotionalAnalysis 
+                sentiment={emotionData.sentiment}
+                sentimentScore={emotionData.sentimentScore}
+                emotions={emotionData.emotions}
+                dominantEmotion={emotionData.dominantEmotion}
+                emotionalIntensity={emotionData.emotionalIntensity}
+                confidence={emotionData.confidence}
+                psychologicalInsights={emotionData.psychologicalInsights}
+                contextualFactors={emotionData.contextualFactors}
+                recommendations={emotionData.recommendations}
+              />
+            )}
+
             {/* Metrics */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
                   <Activity className="h-5 w-5" />
-                  <span>Metrics</span>
+                  <span>Session Metrics</span>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
