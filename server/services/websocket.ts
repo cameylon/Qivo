@@ -51,13 +51,24 @@ export class VoiceWebSocketServer {
       }
     });
 
-    ws.on('message', async (data: Buffer) => {
+    ws.on('message', async (data: Buffer | ArrayBuffer | string) => {
       try {
         client.lastActivity = new Date();
-        await this.handleMessage(clientId, data);
+        
+        // Convert all data types to Buffer for consistent handling
+        let buffer: Buffer;
+        if (Buffer.isBuffer(data)) {
+          buffer = data;
+        } else if (data instanceof ArrayBuffer) {
+          buffer = Buffer.from(data);
+        } else {
+          buffer = Buffer.from(data);
+        }
+        
+        await this.handleMessage(clientId, buffer);
       } catch (error) {
         console.error(`Error handling message from ${clientId}:`, error);
-        this.sendError(ws, `Message processing error: ${error.message}`);
+        this.sendError(ws, `Message processing error: ${(error as Error).message}`);
       }
     });
 
