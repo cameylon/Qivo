@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { EmotionalAnalysis } from "@/components/EmotionalAnalysis";
 import { 
   Mic, 
   Square, 
@@ -23,6 +24,36 @@ interface WebSocketMessage {
   timestamp: Date;
   confidence?: number;
   emotion?: string;
+  emotionAnalysis?: {
+    sentiment: 'positive' | 'negative' | 'neutral';
+    sentimentScore: number;
+    emotions: {
+      joy: number;
+      sadness: number;
+      anger: number;
+      fear: number;
+      surprise: number;
+      disgust: number;
+      trust: number;
+      anticipation: number;
+    };
+    dominantEmotion: string;
+    emotionalIntensity: number;
+    confidence: number;
+    psychologicalInsights: {
+      stressLevel: number;
+      engagementLevel: number;
+      cognitiveLoad: number;
+      emotionalStability: number;
+    };
+    contextualFactors: {
+      formality: number;
+      urgency: number;
+      clarity: number;
+      empathy: number;
+    };
+    recommendations: string[];
+  };
   speaker?: {
     id: string;
     name: string;
