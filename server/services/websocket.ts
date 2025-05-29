@@ -212,7 +212,7 @@ export class VoiceWebSocketServer {
 
     } catch (error) {
       console.error(`Audio processing error for client ${clientId}:`, error);
-      this.sendError(client.ws, `Audio processing failed: ${error.message}`);
+      this.sendError(client.ws, `Audio processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -241,7 +241,7 @@ export class VoiceWebSocketServer {
       console.log(`Voice session ${session.id} started for client ${clientId}`);
     } catch (error) {
       console.error(`Failed to start session for client ${clientId}:`, error);
-      this.sendError(client.ws, `Failed to start voice session: ${error.message}`);
+      this.sendError(client.ws, `Failed to start voice session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -274,7 +274,7 @@ export class VoiceWebSocketServer {
       client.sessionId = undefined;
     } catch (error) {
       console.error(`Failed to end session for client ${clientId}:`, error);
-      this.sendError(client.ws, `Failed to end voice session: ${error.message}`);
+      this.sendError(client.ws, `Failed to end voice session: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -320,7 +320,7 @@ export class VoiceWebSocketServer {
       const now = new Date();
       const staleThreshold = 5 * 60 * 1000; // 5 minutes
 
-      for (const [clientId, client] of this.clients.entries()) {
+      for (const [clientId, client] of Array.from(this.clients.entries())) {
         if (now.getTime() - client.lastActivity.getTime() > staleThreshold) {
           console.log(`Cleaning up stale connection: ${clientId}`);
           this.handleDisconnection(clientId);
