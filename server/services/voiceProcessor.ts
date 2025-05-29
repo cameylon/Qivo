@@ -1,6 +1,6 @@
-import { openaiService, type EmotionAnalysisResult, type TTSResult } from './openai';
+import { openaiService, type EmotionAnalysisResult } from './openai';
 import { storage } from '../storage';
-import type { Conversation, InsertConversation, InsertEmotionAnalysis, SpeakerProfile } from '@shared/schema';
+import type { SpeakerProfile, Conversation, InsertConversation } from '@shared/schema';
 
 export interface VoiceProcessingResult {
   transcript: string;
@@ -8,7 +8,6 @@ export interface VoiceProcessingResult {
   emotion: EmotionAnalysisResult;
   speaker: SpeakerProfile;
   aiResponse: string;
-  aiAudio?: TTSResult;
   conversation: Conversation;
   processingTime: number;
 }
@@ -27,96 +26,112 @@ export class VoiceProcessor {
     sessionId: number,
     audioFormat: string = "webm"
   ): Promise<VoiceProcessingResult> {
-    const startTime = Date.now();
-    const messageId = `${sessionId}-${Date.now()}`;
-
-    // Prevent duplicate processing
-    if (this.processingQueue.has(messageId)) {
-      return await this.processingQueue.get(messageId)!;
+    const processingKey = `${sessionId}_${Date.now()}`;
+    
+    if (this.processingQueue.has(processingKey)) {
+      return this.processingQueue.get(processingKey)!;
     }
 
-    const processingPromise = this._processVoiceInternal(audioBuffer, sessionId, audioFormat, startTime);
-    this.processingQueue.set(messageId, processingPromise);
+    const processingPromise = this._processVoiceInternal(audioBuffer, sessionId, audioFormat);
+    this.processingQueue.set(processingKey, processingPromise);
 
     try {
       const result = await processingPromise;
       return result;
     } finally {
-      this.processingQueue.delete(messageId);
+      this.processingQueue.delete(processingKey);
     }
   }
 
   private async _processVoiceInternal(
     audioBuffer: Buffer,
     sessionId: number,
-    audioFormat: string,
-    startTime: number
+    audioFormat: string
   ): Promise<VoiceProcessingResult> {
     try {
-      // Run transcription and speaker recognition in parallel for speed
-      const [transcriptionResult, speakerResult] = await Promise.all([
-        openaiService.transcribeAudio(audioBuffer, audioFormat),
-        this.recognizeSpeaker(audioBuffer), // This is fast since it's mocked
-      ]);
-      
-      if (!transcriptionResult.text.trim()) {
-        throw new Error("No speech detected in audio");
-      }
+      const startTime = Date.now();
 
-      // Get conversation history early (can run in parallel with emotion analysis)
+      console.log(`🎤 Processing voice for session ${sessionId}: ${audioBuffer.length} bytes`);
+
+      // Step 1: Transcribe audio
+      const transcriptionResult = await openaiService.transcribeAudio(audioBuffer, audioFormat);
+      console.log(`📝 Transcription: "${transcriptionResult.text}"`);
+
+      // Step 2: Recognize speaker (simplified for demo)
+      const speakerResult = await this.recognizeSpeaker(audioBuffer);
+
+      // Step 3: Get conversation history and analyze emotion in parallel
       const [emotionResult, recentConversations] = await Promise.all([
         openaiService.analyzeEmotion(transcriptionResult.text),
         storage.getConversationsBySession(sessionId),
       ]);
 
-      // Store user conversation first
+      console.log(`🧠 Enhanced emotion analysis completed:`, {
+        dominantEmotion: emotionResult.dominantEmotion,
+        sentiment: emotionResult.sentiment,
+        sentimentScore: emotionResult.sentimentScore,
+        emotionalIntensity: emotionResult.emotionalIntensity,
+        stressLevel: emotionResult.psychologicalInsights.stressLevel,
+        engagementLevel: emotionResult.psychologicalInsights.engagementLevel,
+        recommendations: emotionResult.recommendations
+      });
+
+      // Step 4: Store user conversation
       const userConversation = await storage.createConversation({
         sessionId,
         type: 'user',
         content: transcriptionResult.text,
         confidence: transcriptionResult.confidence,
-        emotion: emotionResult.currentEmotion,
+        emotion: emotionResult.dominantEmotion,
         speakerId: speakerResult.speakerId,
         audioFormat,
         modelUsed: 'whisper-1',
         processingTime: null,
       });
 
-      // Prepare conversation history
+      // Step 5: Prepare enhanced conversation context
       const conversationHistory = recentConversations
-        .slice(-6) // Reduced from 10 to 6 for faster processing
+        .slice(-6)
         .map(conv => conv.content);
 
-      // Generate AI response and store emotion analysis in parallel
-      const [aiResponse] = await Promise.all([
-        openaiService.generateResponse(
-          transcriptionResult.text,
-          {
-            emotion: emotionResult.currentEmotion,
-            speaker: speakerResult.speakerId,
-            conversationHistory,
+      // Step 6: Generate AI response with enhanced emotional context
+      const aiResponse = await openaiService.generateResponse(
+        transcriptionResult.text,
+        {
+          emotion: emotionResult.dominantEmotion,
+          speaker: speakerResult.speakerId,
+          conversationHistory,
+          emotionalContext: {
+            sentiment: emotionResult.sentiment,
+            sentimentScore: emotionResult.sentimentScore,
+            emotionalIntensity: emotionResult.emotionalIntensity,
+            stressLevel: emotionResult.psychologicalInsights.stressLevel,
+            engagementLevel: emotionResult.psychologicalInsights.engagementLevel,
+            recommendations: emotionResult.recommendations
           }
-        ),
-        // Store emotion analysis in background (non-blocking)
-        storage.createEmotionAnalysis({
-          conversationId: userConversation.id,
-          sentiment: emotionResult.sentiment,
-          emotions: JSON.stringify(emotionResult.emotions),
-          confidence: emotionResult.confidence,
-        }).catch(err => console.warn('Failed to store emotion analysis:', err)),
-      ]);
+        }
+      );
 
-      // Generate speech for AI response
-      let aiAudio: TTSResult | undefined;
-      try {
-        aiAudio = await openaiService.generateSpeech(aiResponse.content, 'nova');
-        console.log(`Generated speech audio: ${aiAudio.audioBuffer.length} bytes`);
-      } catch (error) {
-        console.warn('Failed to generate speech audio:', error instanceof Error ? error.message : 'Unknown error');
-        // Continue without audio - text response will still be available
-      }
+      // Step 7: Store emotion analysis in background
+      setImmediate(async () => {
+        try {
+          await storage.createEmotionAnalysis({
+            conversationId: userConversation.id,
+            sentiment: emotionResult.sentiment,
+            emotions: JSON.stringify({
+              ...emotionResult.emotions,
+              psychologicalInsights: emotionResult.psychologicalInsights,
+              contextualFactors: emotionResult.contextualFactors,
+              recommendations: emotionResult.recommendations
+            }),
+            confidence: emotionResult.confidence,
+          });
+        } catch (err) {
+          console.warn('Failed to store enhanced emotion analysis:', err);
+        }
+      });
 
-      // Store AI response in background after sending response to client
+      // Step 8: Store AI response in background
       setImmediate(async () => {
         try {
           await storage.createConversation({
@@ -137,6 +152,8 @@ export class VoiceProcessor {
 
       const totalProcessingTime = Date.now() - startTime;
 
+      console.log(`✅ Voice processing completed in ${totalProcessingTime}ms`);
+
       return {
         transcript: transcriptionResult.text,
         confidence: transcriptionResult.confidence,
@@ -155,253 +172,116 @@ export class VoiceProcessor {
   }
 
   private async recognizeSpeaker(audioBuffer: Buffer): Promise<SpeakerRecognitionResult> {
-    // Real speaker recognition based on audio characteristics
+    // Enhanced speaker recognition with audio characteristics
     const audioHash = this.generateAudioHash(audioBuffer);
-    const speakerId = `Speaker_${audioHash}`;
+    const voiceCharacteristics = this.analyzeVoiceCharacteristics(audioBuffer);
     
-    let profile = await storage.getSpeakerProfile(speakerId);
+    let speakerProfile = await storage.getSpeakerProfile(audioHash);
     
-    if (!profile) {
-      // Create new speaker profile with real characteristics
-      const voiceCharacteristics = this.analyzeVoiceCharacteristics(audioBuffer);
-      
-      profile = await storage.createSpeakerProfile({
-        speakerId: speakerId,
-        name: `Speaker ${audioHash.substring(0, 4)}`,
-        voiceProfile: JSON.stringify(voiceCharacteristics),
-        sessionCount: 1,
-        isMock: false,
-      });
-    } else {
-      // Update last seen and session count
-      await storage.updateSpeakerProfile(speakerId, {
+    if (!speakerProfile) {
+      // Create new speaker profile with enhanced characteristics
+      speakerProfile = await storage.createSpeakerProfile({
+        speakerId: audioHash,
+        name: `Speaker_${audioHash.substring(0, 8)}`,
+        voiceCharacteristics: JSON.stringify({
+          ...voiceCharacteristics,
+          firstEncounter: new Date().toISOString(),
+          audioQuality: this.assessAudioQuality(audioBuffer)
+        }),
+        confidence: 0.85,
         lastSeen: new Date(),
-        sessionCount: (profile.sessionCount || 0) + 1,
       });
-      profile = await storage.getSpeakerProfile(speakerId);
+      
+      console.log(`👤 New speaker profile created: ${speakerProfile.name}`);
+    } else {
+      // Update existing profile with new interaction
+      const updatedCharacteristics = {
+        ...JSON.parse(speakerProfile.voiceCharacteristics || '{}'),
+        lastInteraction: new Date().toISOString(),
+        interactionCount: (JSON.parse(speakerProfile.voiceCharacteristics || '{}').interactionCount || 0) + 1,
+        recentAudioQuality: this.assessAudioQuality(audioBuffer)
+      };
+      
+      await storage.updateSpeakerProfile(audioHash, {
+        voiceCharacteristics: JSON.stringify(updatedCharacteristics),
+        lastSeen: new Date(),
+      });
+      
+      console.log(`👤 Updated speaker profile: ${speakerProfile.name}`);
     }
 
     return {
-      speakerId: speakerId,
-      confidence: 0.85, // Higher confidence for real analysis
-      profile: profile!,
+      speakerId: audioHash,
+      confidence: 0.85,
+      profile: speakerProfile,
     };
   }
 
   private generateAudioHash(audioBuffer: Buffer): string {
-    // Generate a hash based on audio buffer characteristics
-    const audioSize = audioBuffer.length;
-    const firstBytes = audioBuffer.slice(0, Math.min(32, audioSize));
-    const lastBytes = audioBuffer.slice(-Math.min(32, audioSize));
-    
-    let hash = 0;
-    for (let i = 0; i < firstBytes.length; i++) {
-      hash = ((hash << 5) - hash + firstBytes[i]) & 0xffffffff;
-    }
-    for (let i = 0; i < lastBytes.length; i++) {
-      hash = ((hash << 5) - hash + lastBytes[i]) & 0xffffffff;
-    }
-    
-    return Math.abs(hash).toString(16).substring(0, 8);
+    // Enhanced audio fingerprinting
+    const characteristics = this.analyzeVoiceCharacteristics(audioBuffer);
+    const hashData = `${characteristics.avgAmplitude}_${characteristics.pitch}_${characteristics.tone}`;
+    return Buffer.from(hashData).toString('base64').substring(0, 16);
   }
 
   private analyzeVoiceCharacteristics(audioBuffer: Buffer): any {
-    // Analyze actual audio characteristics
-    const audioSize = audioBuffer.length;
+    // Enhanced voice characteristic analysis
     const avgAmplitude = this.calculateAverageAmplitude(audioBuffer);
+    const pitch = this.estimatePitch(avgAmplitude);
+    const tone = this.estimateTone(audioBuffer);
+    const variance = this.calculateVariance(audioBuffer);
     
     return {
-      audioSize: audioSize,
-      estimatedPitch: this.estimatePitch(avgAmplitude),
-      tone: this.estimateTone(audioBuffer),
-      accent: "detected",
-      avgAmplitude: avgAmplitude,
+      avgAmplitude: Math.round(avgAmplitude * 100) / 100,
+      pitch: pitch,
+      tone: tone,
+      variance: Math.round(variance * 100) / 100,
+      bufferSize: audioBuffer.length,
+      timestamp: Date.now()
     };
   }
 
   private calculateAverageAmplitude(audioBuffer: Buffer): number {
     let sum = 0;
-    const sampleCount = Math.floor(audioBuffer.length / 2);
-    
-    for (let i = 0; i < audioBuffer.length - 1; i += 2) {
-      try {
-        // Read 16-bit samples safely
-        const sample = audioBuffer.readInt16LE(i);
-        sum += Math.abs(sample);
-      } catch (error) {
-        // Skip invalid samples
-        continue;
-      }
+    for (let i = 0; i < audioBuffer.length; i += 2) {
+      const sample = audioBuffer.readInt16LE(i);
+      sum += Math.abs(sample);
     }
-    return sampleCount > 0 ? sum / sampleCount : 0;
+    return sum / (audioBuffer.length / 2) / 32768;
   }
 
   private estimatePitch(avgAmplitude: number): number {
-    // Estimate pitch based on amplitude (simplified)
-    return Math.max(80, Math.min(300, 150 + (avgAmplitude / 1000)));
+    return Math.min(800, Math.max(80, avgAmplitude * 400 + 200));
   }
 
   private estimateTone(audioBuffer: Buffer): string {
     const variance = this.calculateVariance(audioBuffer);
-    if (variance > 1000) return "dynamic";
-    if (variance > 500) return "moderate";
-    return "steady";
+    if (variance > 0.3) return 'dynamic';
+    if (variance > 0.15) return 'moderate';
+    return 'steady';
   }
 
   private calculateVariance(audioBuffer: Buffer): number {
-    const samples: number[] = [];
-    const maxSamples = Math.min(audioBuffer.length - 1, 1000);
-    
-    for (let i = 0; i < maxSamples; i += 2) {
-      try {
-        samples.push(Math.abs(audioBuffer.readInt16LE(i)));
-      } catch (error) {
-        // Skip invalid samples for robust processing
-        continue;
-      }
+    const samples = [];
+    for (let i = 0; i < Math.min(audioBuffer.length, 1000); i += 2) {
+      samples.push(Math.abs(audioBuffer.readInt16LE(i)));
     }
-    
-    if (samples.length === 0) return 0;
     
     const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
-    const variance = samples.reduce((acc, val) => acc + Math.pow(val - mean, 2), 0) / samples.length;
-    return variance;
+    const variance = samples.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / samples.length;
+    
+    return Math.sqrt(variance) / 32768;
   }
 
-  async processVoiceMessageWithStreaming(
-    audioBuffer: Buffer,
-    sessionId: number,
-    audioFormat: string,
-    onToken: (token: string) => void
-  ): Promise<VoiceProcessingResult> {
-    const messageId = `${sessionId}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-    const startTime = Date.now();
-
-    try {
-      const processingPromise = this._processVoiceInternalWithStreaming(
-        audioBuffer,
-        sessionId,
-        audioFormat,
-        startTime,
-        onToken
-      );
-
-      this.processingQueue.set(messageId, processingPromise);
-      const result = await processingPromise;
-      return result;
-
-    } finally {
-      this.processingQueue.delete(messageId);
-    }
-  }
-
-  private async _processVoiceInternalWithStreaming(
-    audioBuffer: Buffer,
-    sessionId: number,
-    audioFormat: string,
-    startTime: number,
-    onToken: (token: string) => void
-  ): Promise<VoiceProcessingResult> {
-    try {
-      // Run transcription and speaker recognition in parallel for speed
-      const [transcriptionResult, speakerResult] = await Promise.all([
-        openaiService.transcribeAudio(audioBuffer, audioFormat),
-        this.recognizeSpeaker(audioBuffer),
-      ]);
-      
-      if (!transcriptionResult.text.trim()) {
-        throw new Error("No speech detected in audio");
-      }
-
-      // Get conversation history early (can run in parallel with emotion analysis)
-      const [emotionResult, recentConversations] = await Promise.all([
-        openaiService.analyzeEmotion(transcriptionResult.text),
-        storage.getConversationsBySession(sessionId),
-      ]);
-
-      // Store user conversation first
-      const userConversation = await storage.createConversation({
-        sessionId,
-        type: 'user',
-        content: transcriptionResult.text,
-        confidence: transcriptionResult.confidence,
-        emotion: emotionResult.currentEmotion,
-        speakerId: speakerResult.speakerId,
-        audioFormat,
-        modelUsed: 'whisper-1',
-        processingTime: null,
-      });
-
-      // Prepare conversation history
-      const conversationHistory = recentConversations
-        .slice(-3)
-        .map(conv => conv.content);
-
-      // Generate streaming AI response with real-time token delivery
-      const aiResponse = await openaiService.generateStreamingResponse(
-        transcriptionResult.text,
-        {
-          emotion: emotionResult.currentEmotion,
-          speaker: speakerResult.speakerId,
-          conversationHistory,
-        },
-        onToken
-      );
-
-      // Store emotion analysis and AI response in background
-      setImmediate(async () => {
-        try {
-          await Promise.all([
-            storage.createEmotionAnalysis({
-              conversationId: userConversation.id,
-              sentiment: emotionResult.sentiment,
-              emotions: JSON.stringify(emotionResult.emotions),
-              confidence: emotionResult.confidence,
-            }),
-            storage.createConversation({
-              sessionId,
-              type: 'ai',
-              content: aiResponse.content,
-              confidence: null,
-              emotion: null,
-              speakerId: null,
-              audioFormat: null,
-              modelUsed: aiResponse.model,
-              processingTime: aiResponse.processingTime,
-            })
-          ]);
-        } catch (err) {
-          console.warn('Failed to store background data:', err);
-        }
-      });
-
-      const totalProcessingTime = Date.now() - startTime;
-
-      return {
-        transcript: transcriptionResult.text,
-        confidence: transcriptionResult.confidence,
-        emotion: emotionResult,
-        speaker: speakerResult.profile,
-        aiResponse: aiResponse.content,
-        conversation: userConversation,
-        processingTime: totalProcessingTime,
-      };
-
-    } catch (error) {
-      console.error("Streaming voice processing error:", error);
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Streaming voice processing failed: ${errorMessage}`);
-    }
+  private assessAudioQuality(audioBuffer: Buffer): string {
+    const size = audioBuffer.length;
+    if (size > 50000) return 'high';
+    if (size > 10000) return 'medium';
+    return 'low';
   }
 
   async getSessionMetrics(sessionId: number) {
     const conversations = await storage.getConversationsBySession(sessionId);
-    const session = await storage.getVoiceSession(sessionId);
-    
-    if (!session) {
-      throw new Error("Session not found");
-    }
-
     const userMessages = conversations.filter(c => c.type === 'user');
     const aiMessages = conversations.filter(c => c.type === 'ai');
     
@@ -414,14 +294,15 @@ export class VoiceProcessor {
       : 0;
 
     return {
-      sessionId,
       totalMessages: conversations.length,
       userMessages: userMessages.length,
       aiMessages: aiMessages.length,
-      avgTranscriptionConfidence: avgConfidence,
-      avgResponseTime: avgResponseTime / 1000, // Convert to seconds
-      sessionDuration: session.duration || 0,
-      isActive: session.isActive,
+      avgTranscriptionConfidence: Math.round(avgConfidence * 100),
+      avgResponseTime: Math.round(avgResponseTime),
+      sessionDuration: conversations.length > 0 
+        ? new Date(conversations[conversations.length - 1].timestamp).getTime() - 
+          new Date(conversations[0].timestamp).getTime()
+        : 0,
     };
   }
 }
