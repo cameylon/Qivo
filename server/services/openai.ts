@@ -13,13 +13,33 @@ export interface TranscriptionResult {
 
 export interface EmotionAnalysisResult {
   sentiment: 'positive' | 'negative' | 'neutral';
+  sentimentScore: number; // -1 to 1 scale
   emotions: {
-    positive: number;
-    neutral: number;
-    negative: number;
+    joy: number;
+    sadness: number;
+    anger: number;
+    fear: number;
+    surprise: number;
+    disgust: number;
+    trust: number;
+    anticipation: number;
   };
-  currentEmotion: string;
+  dominantEmotion: string;
+  emotionalIntensity: number; // 0 to 1 scale
   confidence: number;
+  psychologicalInsights: {
+    stressLevel: number;
+    engagementLevel: number;
+    cognitiveLoad: number;
+    emotionalStability: number;
+  };
+  contextualFactors: {
+    formality: number;
+    urgency: number;
+    clarity: number;
+    empathy: number;
+  };
+  recommendations: string[];
 }
 
 export interface AIResponse {
@@ -119,53 +139,133 @@ export class OpenAIService {
       const startTime = Date.now();
 
       const response = await openai.chat.completions.create({
-        model: "gpt-4o",
+        model: "gpt-4o", // the newest OpenAI model is "gpt-4o" which was released May 13, 2024. do not change this unless explicitly requested by the user
         messages: [
           {
             role: "system",
-            content: `You are an emotion analysis expert. Analyze the sentiment and emotions in the given text. 
-            Provide scores for positive, neutral, and negative emotions (0-100, must sum to 100).
-            Also identify the primary emotion being expressed.
-            Respond with JSON in this format: {
-              "sentiment": "positive|negative|neutral",
-              "emotions": {
-                "positive": number,
-                "neutral": number,
-                "negative": number
-              },
-              "currentEmotion": "string describing the main emotion",
-              "confidence": number (0-1)
-            }`
+            content: `You are an advanced emotional intelligence and psychological analysis AI with expertise in linguistics, psychology, and human behavior. Analyze text for comprehensive emotional, psychological, and contextual insights.
+
+Provide detailed analysis in JSON format with these EXACT fields:
+{
+  "sentiment": "positive|negative|neutral",
+  "sentimentScore": number (-1 to 1),
+  "emotions": {
+    "joy": number (0-1),
+    "sadness": number (0-1),
+    "anger": number (0-1),
+    "fear": number (0-1),
+    "surprise": number (0-1),
+    "disgust": number (0-1),
+    "trust": number (0-1),
+    "anticipation": number (0-1)
+  },
+  "dominantEmotion": "string",
+  "emotionalIntensity": number (0-1),
+  "confidence": number (0-1),
+  "psychologicalInsights": {
+    "stressLevel": number (0-1),
+    "engagementLevel": number (0-1),
+    "cognitiveLoad": number (0-1),
+    "emotionalStability": number (0-1)
+  },
+  "contextualFactors": {
+    "formality": number (0-1),
+    "urgency": number (0-1),
+    "clarity": number (0-1),
+    "empathy": number (0-1)
+  },
+  "recommendations": ["string array of 2-3 actionable insights"]
+}
+
+Analyze linguistic patterns, emotional undertones, psychological state indicators, stress markers, engagement levels, cognitive load, and provide practical recommendations.`,
           },
           {
             role: "user",
-            content: text,
+            content: `Perform comprehensive emotional and psychological analysis of this text: "${text}"`,
           },
         ],
         response_format: { type: "json_object" },
+        temperature: 0.2,
+        max_tokens: 1000,
       });
 
       const result = JSON.parse(response.choices[0].message.content || "{}");
       const processingTime = Date.now() - startTime;
 
+      console.log(`Advanced emotion analysis completed in ${processingTime}ms`);
+
+      // Validate and normalize the response
+      const emotions = result.emotions || {};
+      const insights = result.psychologicalInsights || {};
+      const contextual = result.contextualFactors || {};
+
       return {
-        sentiment: result.sentiment || 'neutral',
+        sentiment: ['positive', 'negative', 'neutral'].includes(result.sentiment) 
+          ? result.sentiment : 'neutral',
+        sentimentScore: Math.max(-1, Math.min(1, result.sentimentScore || 0)),
         emotions: {
-          positive: Math.max(0, Math.min(100, result.emotions?.positive || 33)),
-          neutral: Math.max(0, Math.min(100, result.emotions?.neutral || 34)),
-          negative: Math.max(0, Math.min(100, result.emotions?.negative || 33)),
+          joy: Math.max(0, Math.min(1, emotions.joy || 0)),
+          sadness: Math.max(0, Math.min(1, emotions.sadness || 0)),
+          anger: Math.max(0, Math.min(1, emotions.anger || 0)),
+          fear: Math.max(0, Math.min(1, emotions.fear || 0)),
+          surprise: Math.max(0, Math.min(1, emotions.surprise || 0)),
+          disgust: Math.max(0, Math.min(1, emotions.disgust || 0)),
+          trust: Math.max(0, Math.min(1, emotions.trust || 0)),
+          anticipation: Math.max(0, Math.min(1, emotions.anticipation || 0)),
         },
-        currentEmotion: result.currentEmotion || 'Neutral',
+        dominantEmotion: result.dominantEmotion || 'neutral',
+        emotionalIntensity: Math.max(0, Math.min(1, result.emotionalIntensity || 0.5)),
         confidence: Math.max(0, Math.min(1, result.confidence || 0.8)),
+        psychologicalInsights: {
+          stressLevel: Math.max(0, Math.min(1, insights.stressLevel || 0.3)),
+          engagementLevel: Math.max(0, Math.min(1, insights.engagementLevel || 0.5)),
+          cognitiveLoad: Math.max(0, Math.min(1, insights.cognitiveLoad || 0.4)),
+          emotionalStability: Math.max(0, Math.min(1, insights.emotionalStability || 0.7)),
+        },
+        contextualFactors: {
+          formality: Math.max(0, Math.min(1, contextual.formality || 0.5)),
+          urgency: Math.max(0, Math.min(1, contextual.urgency || 0.3)),
+          clarity: Math.max(0, Math.min(1, contextual.clarity || 0.7)),
+          empathy: Math.max(0, Math.min(1, contextual.empathy || 0.5)),
+        },
+        recommendations: Array.isArray(result.recommendations) 
+          ? result.recommendations.slice(0, 3) 
+          : ['Continue natural conversation', 'Maintain current emotional tone'],
       };
     } catch (error) {
       console.error("Emotion analysis error:", error);
-      // Return neutral emotion on error
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      
+      // Return comprehensive neutral fallback
       return {
         sentiment: 'neutral',
-        emotions: { positive: 33, neutral: 34, negative: 33 },
-        currentEmotion: 'Neutral',
+        sentimentScore: 0,
+        emotions: {
+          joy: 0.1,
+          sadness: 0.1,
+          anger: 0.1,
+          fear: 0.1,
+          surprise: 0.1,
+          disgust: 0.1,
+          trust: 0.2,
+          anticipation: 0.2,
+        },
+        dominantEmotion: 'neutral',
+        emotionalIntensity: 0.3,
         confidence: 0.5,
+        psychologicalInsights: {
+          stressLevel: 0.3,
+          engagementLevel: 0.5,
+          cognitiveLoad: 0.4,
+          emotionalStability: 0.7,
+        },
+        contextualFactors: {
+          formality: 0.5,
+          urgency: 0.3,
+          clarity: 0.7,
+          empathy: 0.5,
+        },
+        recommendations: ['Continue natural conversation', 'Monitor for clearer emotional signals'],
       };
     }
   }
