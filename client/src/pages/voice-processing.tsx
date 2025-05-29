@@ -34,13 +34,21 @@ export default function VoiceProcessing() {
     audioFormat,
   } = useAudioRecorder((audioBlob) => {
     if (sessionId && isConnected && audioBlob.size > 1024) {
-      // Only send audio if it's large enough and we have an active session
-      console.log(`Converting audio blob: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      console.log(`Processing audio chunk: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
+      
+      // Convert blob to ArrayBuffer and send as binary data
       audioBlob.arrayBuffer().then((buffer) => {
-        console.log(`Sending audio buffer: ${buffer.byteLength} bytes`);
-        sendMessage(buffer);
+        console.log(`Transmitting audio: ${buffer.byteLength} bytes`);
+        
+        // Send raw binary data directly
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+          wsRef.current.send(buffer);
+          console.log(`Audio sent via WebSocket: ${buffer.byteLength} bytes`);
+        } else {
+          console.error('WebSocket not ready for audio transmission');
+        }
       }).catch((error) => {
-        console.error('Error converting audio blob to buffer:', error);
+        console.error('Audio conversion failed:', error);
       });
     }
   });

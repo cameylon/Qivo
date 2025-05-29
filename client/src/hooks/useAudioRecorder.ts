@@ -92,12 +92,15 @@ export function useAudioRecorder(
 
       mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+          
           // Send audio chunks immediately for real-time transcription
           if (onAudioData && event.data.size > 1024) {
             console.log(`Real-time audio chunk: ${event.data.size} bytes`);
-            onAudioData(event.data);
+            // Create a new blob for immediate transmission
+            const immediateBlob = new Blob([event.data], { type: event.data.type });
+            onAudioData(immediateBlob);
           }
-          audioChunksRef.current.push(event.data);
         }
       };
 
@@ -110,8 +113,8 @@ export function useAudioRecorder(
         }
       };
 
-      // Start recording with time slices for real-time processing
-      mediaRecorderRef.current.start(2000); // 2-second chunks for real-time transcription
+      // Start recording with smaller time slices for lower latency
+      mediaRecorderRef.current.start(1500); // 1.5-second chunks for faster processing
       setIsRecording(true);
       recordingStartTimeRef.current = Date.now();
 

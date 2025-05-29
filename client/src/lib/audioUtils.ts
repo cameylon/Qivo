@@ -42,7 +42,7 @@ export class AudioUtils {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true,
-        sampleRate: { ideal: 48000 },
+        sampleRate: { ideal: 16000 }, // Lower sample rate for faster processing
         channelCount: { ideal: 1 }, // Mono
       },
     };
