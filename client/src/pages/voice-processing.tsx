@@ -34,7 +34,7 @@ export default function VoiceProcessing() {
     recordingDuration,
     audioFormat,
   } = useAudioRecorder((audioBlob) => {
-    if (sessionId && isConnected && audioBlob.size > 1024) {
+    if (sessionId && isConnected && audioBlob.size > 0) {
       console.log(`Processing audio chunk: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       
       // Send audio data directly as blob without conversion issues
@@ -49,6 +49,8 @@ export default function VoiceProcessing() {
         console.error('Failed to read audio blob');
       };
       reader.readAsArrayBuffer(audioBlob);
+    } else {
+      console.log(`Skipping audio chunk - sessionId: ${sessionId}, connected: ${isConnected}, size: ${audioBlob.size}`);
     }
   });
 
