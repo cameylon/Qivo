@@ -75,14 +75,18 @@ export class VoiceWebSocketServer {
     const client = this.clients.get(clientId);
     if (!client) return;
 
+    console.log(`Received message from ${clientId}: ${data.length} bytes`);
+
     try {
       // Try to parse as JSON for control messages
       const textData = data.toString();
       const message: VoiceMessage = JSON.parse(textData);
       
+      console.log(`Control message: ${message.type}`);
       await this.handleControlMessage(clientId, message);
     } catch (jsonError) {
       // If JSON parsing fails, treat as binary audio data
+      console.log(`Processing audio data: ${data.length} bytes`);
       await this.handleAudioData(clientId, data);
     }
   }
