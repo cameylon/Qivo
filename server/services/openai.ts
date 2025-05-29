@@ -63,31 +63,46 @@ export class OpenAIService {
         filename = "audio.webm";
       }
       
-      console.log(`🎤 Processing audio: ${filename}, size: ${audioBuffer.length} bytes, format: ${format}`);
+      console.log(`Processing audio: ${filename}, size: ${audioBuffer.length} bytes, format: ${format}`);
       
       // Create the file object for OpenAI
       const file = new File([audioBuffer], filename, { 
         type: mimeType 
       });
 
+      console.log(`Sending to OpenAI Whisper API with file type: ${file.type}`);
+
       const transcription = await openai.audio.transcriptions.create({
         file: file,
         model: "whisper-1",
         response_format: "json",
-        language: "en", // Specify English for better accuracy
-        temperature: 0.0, // Use deterministic transcription for consistency
+        language: "en",
+        temperature: 0.0,
       });
 
+      console.log(`Transcription successful: "${transcription.text}"`);
       const processingTime = Date.now() - startTime;
 
+      if (!transcription.text || transcription.text.trim().length === 0) {
+        console.warn("Empty transcription result from OpenAI");
+        throw new Error("No speech detected in audio");
+      }
+
       return {
-        text: transcription.text,
-        confidence: 0.95, // Whisper doesn't provide confidence, using default high value
+        text: transcription.text.trim(),
+        confidence: 0.95,
         duration: undefined,
       };
     } catch (error) {
-      console.error("Transcription error:", error);
-      throw new Error(`Failed to transcribe audio: ${error.message}`);
+      console.error("Transcription error details:", error);
+      
+      if (error.message?.includes('API key')) {
+        throw new Error("OpenAI API key issue - please check your API key configuration");
+      } else if (error.message?.includes('Invalid audio')) {
+        throw new Error("Audio format not supported - please try a different recording");
+      } else {
+        throw new Error(`Transcription failed: ${error.message}`);
+      }
     }
   }
 

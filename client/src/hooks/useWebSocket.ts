@@ -146,18 +146,17 @@ export function useWebSocket(): UseWebSocketReturn {
       case 'processing':
         // Could show a processing indicator
         break;
-      case 'voice_processed':
-        // Add user message
+      case 'transcript_ready':
+        // Add user message immediately when transcript is ready
         setMessages(prev => [...prev, {
           type: 'user',
           content: data.transcript,
           timestamp: new Date(),
           confidence: data.confidence,
-          emotion: data.emotion?.currentEmotion,
-          speaker: data.speaker,
         }]);
-
-        // Add AI response
+        break;
+      case 'voice_processed':
+        // Only add AI response since user message was already added in transcript_ready
         setMessages(prev => [...prev, {
           type: 'ai',
           content: data.aiResponse,
