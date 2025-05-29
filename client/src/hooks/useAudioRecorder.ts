@@ -97,9 +97,7 @@ export function useAudioRecorder(
           // Send audio chunks immediately for real-time transcription
           if (onAudioData && event.data.size > 1024) {
             console.log(`Real-time audio chunk: ${event.data.size} bytes`);
-            // Create a new blob for immediate transmission
-            const immediateBlob = new Blob([event.data], { type: event.data.type });
-            onAudioData(immediateBlob);
+            onAudioData(event.data);
           }
         }
       };

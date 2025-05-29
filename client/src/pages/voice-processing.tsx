@@ -37,13 +37,18 @@ export default function VoiceProcessing() {
     if (sessionId && isConnected && audioBlob.size > 1024) {
       console.log(`Processing audio chunk: ${audioBlob.size} bytes, type: ${audioBlob.type}`);
       
-      // Convert blob to ArrayBuffer and send as binary data
-      audioBlob.arrayBuffer().then((buffer) => {
-        console.log(`Transmitting audio: ${buffer.byteLength} bytes`);
-        sendMessage(buffer);
-      }).catch((error) => {
-        console.error('Audio conversion failed:', error);
-      });
+      // Send audio data directly as blob without conversion issues
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (reader.result instanceof ArrayBuffer) {
+          console.log(`Transmitting audio buffer: ${reader.result.byteLength} bytes`);
+          sendMessage(reader.result);
+        }
+      };
+      reader.onerror = () => {
+        console.error('Failed to read audio blob');
+      };
+      reader.readAsArrayBuffer(audioBlob);
     }
   });
 
