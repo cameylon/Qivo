@@ -144,6 +144,35 @@ export default function VoiceProcessing() {
         setSessionId(data.sessionId);
         break;
       case 'transcript_ready':
+        // Update messages with transcription
+        setMessages(prev => [...prev, {
+          type: 'user',
+          content: data.transcript,
+          timestamp: new Date(),
+          confidence: data.confidence,
+          speaker: data.speaker,
+          processingTime: data.processingTime
+        }]);
+        
+        // Update metrics
+        setMetrics(prev => ({
+          ...prev,
+          transcriptionConfidence: data.confidence || 0,
+          avgResponseTime: data.processingTime || 0
+        }));
+        break;
+      case 'emotion_analysis_complete':
+        // Handle full emotion analysis results
+        if (data.emotionAnalysis) {
+          setEmotionData(data.emotionAnalysis);
+          setMetrics(prev => ({
+            ...prev,
+            emotionConfidence: data.emotionAnalysis.confidence || 0
+          }));
+        }
+        break;
+      case 'voice_processed':
+        // Handle complete processing results
         setMessages(prev => [...prev, {
           type: 'user',
           content: data.transcript,

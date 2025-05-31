@@ -36,11 +36,12 @@ export class FastVoiceProcessor {
   }
 
   // Background processing for full analysis (runs async, doesn't block transcription response)
-  private async processBackgroundAnalysis(
+  async processBackgroundAnalysis(
     audioBuffer: Buffer,
     sessionId: number,
     audioFormat: string,
-    transcriptionResult: any
+    transcriptionResult: any,
+    websocketCallback?: (data: any) => void
   ): Promise<void> {
     try {
       console.log(`🔄 Starting background analysis for: "${transcriptionResult.text}"`);
@@ -73,13 +74,27 @@ export class FastVoiceProcessor {
           conversationId: latestConversation.id,
           sentiment: emotionResult.sentiment,
           sentimentScore: emotionResult.sentimentScore,
-          emotions: emotionResult.emotions,
+          emotions: JSON.stringify(emotionResult.emotions), // Convert to string for storage
           dominantEmotion: emotionResult.dominantEmotion,
           emotionalIntensity: emotionResult.emotionalIntensity,
           confidence: emotionResult.confidence,
-          psychologicalInsights: emotionResult.psychologicalInsights,
-          contextualFactors: emotionResult.contextualFactors,
+          psychologicalInsights: JSON.stringify(emotionResult.psychologicalInsights),
+          contextualFactors: JSON.stringify(emotionResult.contextualFactors),
           recommendations: emotionResult.recommendations,
+        });
+      }
+
+      // Send complete emotion analysis to frontend via WebSocket
+      if (websocketCallback) {
+        websocketCallback({
+          action: 'emotion_analysis_complete',
+          emotionAnalysis: emotionResult,
+          transcript: transcriptionResult.text,
+          speaker: {
+            id: `Speaker_${Math.random().toString(36).substring(7)}`,
+            name: 'User'
+          },
+          sessionId
         });
       }
 
