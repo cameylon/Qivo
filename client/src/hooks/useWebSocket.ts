@@ -23,6 +23,7 @@ interface UseWebSocketReturn {
   startSession: () => Promise<number>;
   endSession: () => Promise<void>;
   wsRef: React.MutableRefObject<WebSocket | null>;
+  queryData: (action: string, params?: any) => Promise<any>;
 }
 
 export function useWebSocket(): UseWebSocketReturn {
@@ -36,6 +37,45 @@ export function useWebSocket(): UseWebSocketReturn {
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const reconnectAttempts = useRef(0);
   const maxReconnectAttempts = 5;
+  const dataRequestsRef = useRef<Map<string, { resolve: (value: any) => void; reject: (error: any) => void }>>(new Map());
+
+  const handleWebSocketMessage = useCallback((data: any) => {
+    console.log('WebSocket message received:', data);
+    
+    if (data.type === 'response') {
+      setMessages(prev => [...prev, {
+        type: data.data.speaker?.id === 'user' ? 'user' : 'ai',
+        content: data.data.transcript || data.data.aiResponse || data.data.content,
+        timestamp: new Date(),
+        confidence: data.data.confidence,
+        emotion: data.data.emotion?.dominantEmotion,
+        speaker: data.data.speaker,
+        processingTime: data.data.processingTime,
+        model: data.data.model,
+      }]);
+      
+      if (data.data.metrics) {
+        setMetrics(data.data.metrics);
+      }
+    } else if (data.type === 'control') {
+      if (data.data.action === 'session_started') {
+        setSessionId(data.data.sessionId);
+      } else if (data.data.action === 'session_ended') {
+        setSessionId(null);
+      }
+    } else if (data.type === 'data') {
+      const requestId = data.data.requestId;
+      if (requestId && dataRequestsRef.current.has(requestId)) {
+        const request = dataRequestsRef.current.get(requestId);
+        if (request) {
+          request.resolve(data.data);
+          dataRequestsRef.current.delete(requestId);
+        }
+      }
+    } else {
+      console.warn(`Unknown message type: ${data.type}`);
+    }
+  }, []);
 
   const connect = useCallback(() => {
     try {
@@ -297,6 +337,41 @@ export function useWebSocket(): UseWebSocketReturn {
     }
   }, [isConnected, sendMessage]);
 
+  const queryData = useCallback(async (action: string, params?: any): Promise<any> => {
+    return new Promise((resolve, reject) => {
+      if (!isConnected || !wsRef.current) {
+        reject(new Error('WebSocket not connected'));
+        return;
+      }
+
+      const requestId = Math.random().toString(36).substring(7);
+      dataRequestsRef.current.set(requestId, { resolve, reject });
+
+      const message = JSON.stringify({
+        type: 'control',
+        data: { action, requestId, ...params }
+      });
+
+      try {
+        wsRef.current.send(message);
+        
+        // Set timeout for requests
+        setTimeout(() => {
+          if (dataRequestsRef.current.has(requestId)) {
+            const request = dataRequestsRef.current.get(requestId);
+            if (request) {
+              request.reject(new Error('Request timeout'));
+              dataRequestsRef.current.delete(requestId);
+            }
+          }
+        }, 10000); // 10 second timeout
+      } catch (error) {
+        dataRequestsRef.current.delete(requestId);
+        reject(error);
+      }
+    });
+  }, [isConnected]);
+
   return {
     isConnected,
     connectionStatus,
@@ -306,5 +381,6 @@ export function useWebSocket(): UseWebSocketReturn {
     startSession,
     endSession,
     wsRef,
+    queryData,
   };
 }
