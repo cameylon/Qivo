@@ -53,19 +53,31 @@ export class VoiceProcessor {
 
       console.log(`🎤 Processing voice for session ${sessionId}: ${audioBuffer.length} bytes`);
 
-      // Step 1: Transcribe audio
-      const transcriptionResult = await openaiService.transcribeAudio(audioBuffer, audioFormat);
-      console.log(`📝 Transcription: "${transcriptionResult.text}"`);
-
-      // Step 2: Recognize speaker (simplified for demo)
-      const speakerResult = await this.recognizeSpeaker(audioBuffer);
-
-      // Step 3: Get conversation history and analyze emotion in parallel
-      const [emotionResult, recentConversations] = await Promise.all([
-        openaiService.analyzeEmotion(transcriptionResult.text),
+      // Step 1: Start all independent operations in parallel for maximum speed
+      const [transcriptionResult, speakerResult, recentConversations] = await Promise.all([
+        openaiService.transcribeAudio(audioBuffer, audioFormat),
+        this.recognizeSpeaker(audioBuffer),
         storage.getConversationsBySession(sessionId),
       ]);
 
+      console.log(`📝 Transcription: "${transcriptionResult.text}"`);
+
+      // Step 3: Store user conversation immediately (don't wait for emotion analysis)
+      const userConversationPromise = storage.createConversation({
+        sessionId,
+        type: 'user',
+        content: transcriptionResult.text,
+        confidence: transcriptionResult.confidence,
+        emotion: 'processing', // Will be updated when emotion analysis completes
+        speakerId: speakerResult.speakerId,
+        audioFormat,
+        modelUsed: 'whisper-1',
+        processingTime: null,
+      });
+
+      // Step 4: Wait for emotion analysis to complete
+      const emotionResult = await emotionPromise;
+      
       console.log(`🧠 Enhanced emotion analysis completed:`, {
         dominantEmotion: emotionResult.dominantEmotion,
         sentiment: emotionResult.sentiment,
@@ -76,7 +88,7 @@ export class VoiceProcessor {
         recommendations: emotionResult.recommendations
       });
 
-      // Step 4: Store user conversation
+      // Step 5: Wait for user conversation to be stored
       const userConversation = await storage.createConversation({
         sessionId,
         type: 'user',
