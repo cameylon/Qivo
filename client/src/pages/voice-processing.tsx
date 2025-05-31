@@ -171,6 +171,17 @@ export default function VoiceProcessing() {
           }));
         }
         break;
+      case 'ultra_fast_transcription':
+        // Handle ultra-fast transcription (minimal latency)
+        setMessages(prev => [...prev, {
+          type: 'user',
+          content: data.transcript,
+          timestamp: new Date(),
+          confidence: data.confidence,
+          speaker: data.speaker,
+          processingTime: data.processingTime
+        }]);
+        break;
       case 'ai_response_ready':
         // Handle AI response
         setMessages(prev => [...prev, {
