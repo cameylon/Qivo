@@ -158,12 +158,16 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // ONLY use ultra-fast processor to avoid duplicates
+      // Use ultra-fast processor for immediate transcription
+      let transcriptionText = '';
       await ultraFastProcessor.processAudioChunkUltraFast(
         clientId,
         audioBuffer,
         client.sessionId,
         (data) => {
+          if (data.action === 'ultra_fast_transcription') {
+            transcriptionText = data.transcript;
+          }
           this.sendMessage(client.ws, {
             type: 'response',
             data
@@ -171,24 +175,27 @@ export class VoiceWebSocketServer {
         }
       );
 
-      // Run background analysis separately (emotion + AI response)
-      setTimeout(async () => {
-        try {
-          await fastVoiceProcessor.processBackgroundAnalysis(
-            audioBuffer,
-            client.sessionId!,
-            'webm',
-            (data) => {
-              this.sendMessage(client.ws, {
-                type: 'response',
-                data
-              });
-            }
-          );
-        } catch (error) {
-          console.error('Background analysis error:', error);
-        }
-      }, 100);
+      // Run background analysis with the transcription result
+      if (transcriptionText) {
+        setTimeout(async () => {
+          try {
+            await fastVoiceProcessor.processBackgroundAnalysis(
+              audioBuffer,
+              client.sessionId!,
+              'webm',
+              { text: transcriptionText, confidence: 0.95 },
+              (data) => {
+                this.sendMessage(client.ws, {
+                  type: 'response',
+                  data
+                });
+              }
+            );
+          } catch (error) {
+            console.error('Background analysis error:', error);
+          }
+        }, 100);
+      }
 
     } catch (error) {
       console.error(`Audio processing error for client ${clientId}:`, error);
