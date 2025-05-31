@@ -52,7 +52,7 @@ export class FastVoiceProcessor {
         storage.getConversationsBySession(sessionId)
       ]);
 
-      // Store conversation with full analysis
+      // Store user conversation with full analysis
       await storage.createConversation({
         sessionId,
         type: 'user',
@@ -63,6 +63,33 @@ export class FastVoiceProcessor {
         audioFormat,
         modelUsed: 'whisper-1',
         processingTime: null,
+      });
+
+      // Generate AI response
+      const conversationHistory = recentConversations
+        .slice(-6)
+        .map(conv => conv.content);
+
+      const aiResponse = await openaiService.generateResponse(
+        transcriptionResult.text,
+        {
+          emotion: emotionResult.dominantEmotion,
+          conversationHistory,
+          speaker: 'user'
+        }
+      );
+
+      // Store AI response
+      await storage.createConversation({
+        sessionId,
+        type: 'ai',
+        content: aiResponse.content,
+        confidence: 1.0,
+        emotion: 'helpful',
+        speakerId: 'ai_assistant',
+        audioFormat: null,
+        modelUsed: aiResponse.model,
+        processingTime: aiResponse.processingTime,
       });
 
       // Store emotion analysis
@@ -84,8 +111,9 @@ export class FastVoiceProcessor {
         });
       }
 
-      // Send complete emotion analysis to frontend via WebSocket
+      // Send complete analysis and AI response to frontend via WebSocket
       if (websocketCallback) {
+        // Send emotion analysis
         websocketCallback({
           action: 'emotion_analysis_complete',
           emotionAnalysis: emotionResult,
@@ -93,6 +121,19 @@ export class FastVoiceProcessor {
           speaker: {
             id: `Speaker_${Math.random().toString(36).substring(7)}`,
             name: 'User'
+          },
+          sessionId
+        });
+
+        // Send AI response
+        websocketCallback({
+          action: 'ai_response_ready',
+          aiResponse: aiResponse.content,
+          processingTime: aiResponse.processingTime,
+          model: aiResponse.model,
+          speaker: {
+            id: 'ai_assistant',
+            name: 'AI Assistant'
           },
           sessionId
         });

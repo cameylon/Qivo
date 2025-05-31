@@ -171,13 +171,15 @@ export default function VoiceProcessing() {
           }));
         }
         break;
-      case 'voice_processed':
-        // Handle complete processing results
+      case 'ai_response_ready':
+        // Handle AI response
         setMessages(prev => [...prev, {
-          type: 'user',
-          content: data.transcript,
+          type: 'ai',
+          content: data.aiResponse,
           timestamp: new Date(),
-          confidence: data.confidence,
+          speaker: data.speaker,
+          processingTime: data.processingTime,
+          model: data.model
         }]);
         break;
       case 'voice_processed':
