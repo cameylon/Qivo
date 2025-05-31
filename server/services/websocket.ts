@@ -205,6 +205,21 @@ export class VoiceWebSocketServer {
         }
       });
 
+      // Start background analysis with WebSocket callback for emotion data
+      fastVoiceProcessor.processBackgroundAnalysis(
+        audioBuffer,
+        client.sessionId,
+        'webm',
+        { text: fastResult.transcript, confidence: fastResult.confidence },
+        (analysisData) => {
+          // Send complete emotion analysis to frontend
+          this.sendMessage(client.ws, {
+            type: 'response',
+            data: analysisData
+          });
+        }
+      ).catch(error => console.error('Background analysis error:', error));
+
       // Update system metrics in background (non-blocking)
       setImmediate(() => {
         this.updateSystemMetrics().catch(err => 
