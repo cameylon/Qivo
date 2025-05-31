@@ -177,6 +177,7 @@ export class VoiceWebSocketServer {
 
       // Run background analysis with the transcription result
       if (transcriptionText) {
+        console.log(`🔄 Starting background analysis for: "${transcriptionText}"`);
         setTimeout(async () => {
           try {
             await fastVoiceProcessor.processBackgroundAnalysis(
@@ -185,6 +186,7 @@ export class VoiceWebSocketServer {
               'webm',
               { text: transcriptionText, confidence: 0.95 },
               (data) => {
+                console.log(`📊 Sending background analysis result:`, data.action);
                 this.sendMessage(client.ws, {
                   type: 'response',
                   data
@@ -195,6 +197,8 @@ export class VoiceWebSocketServer {
             console.error('Background analysis error:', error);
           }
         }, 100);
+      } else {
+        console.warn('No transcription text available for background analysis');
       }
 
     } catch (error) {
