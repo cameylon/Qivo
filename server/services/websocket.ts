@@ -158,16 +158,12 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Use ultra-fast processor for immediate transcription
-      let transcriptionText = '';
+      // Use ultra-fast processor for immediate transcription and get result
       await ultraFastProcessor.processAudioChunkUltraFast(
         clientId,
         audioBuffer,
         client.sessionId,
         (data) => {
-          if (data.action === 'ultra_fast_transcription') {
-            transcriptionText = data.transcript;
-          }
           this.sendMessage(client.ws, {
             type: 'response',
             data
@@ -175,31 +171,34 @@ export class VoiceWebSocketServer {
         }
       );
 
-      // Run background analysis with the transcription result
-      if (transcriptionText) {
-        console.log(`🔄 Starting background analysis for: "${transcriptionText}"`);
-        setTimeout(async () => {
-          try {
-            await fastVoiceProcessor.processBackgroundAnalysis(
-              audioBuffer,
-              client.sessionId!,
-              'webm',
-              { text: transcriptionText, confidence: 0.95 },
-              (data) => {
-                console.log(`📊 Sending background analysis result:`, data.action);
-                this.sendMessage(client.ws, {
-                  type: 'response',
-                  data
-                });
-              }
-            );
-          } catch (error) {
-            console.error('Background analysis error:', error);
-          }
-        }, 100);
-      } else {
-        console.warn('No transcription text available for background analysis');
-      }
+      // Also run fast voice processor for complete analysis (emotion + AI)
+      setTimeout(async () => {
+        try {
+          console.log(`🔄 Starting complete analysis with emotion and AI response`);
+          await fastVoiceProcessor.processVoiceForRealtime(
+            audioBuffer,
+            client.sessionId!,
+            'webm'
+          );
+          
+          // Get the transcription result and run background analysis
+          await fastVoiceProcessor.processBackgroundAnalysis(
+            audioBuffer,
+            client.sessionId!,
+            'webm',
+            undefined,
+            (data) => {
+              console.log(`📊 Sending analysis result:`, data.action);
+              this.sendMessage(client.ws, {
+                type: 'response',
+                data
+              });
+            }
+          );
+        } catch (error) {
+          console.error('Complete analysis error:', error);
+        }
+      }, 500);
 
     } catch (error) {
       console.error(`Audio processing error for client ${clientId}:`, error);
