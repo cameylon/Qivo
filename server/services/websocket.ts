@@ -1,6 +1,7 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { voiceProcessor } from './voiceProcessor';
+import { fastVoiceProcessor } from './fastVoiceProcessor';
 import { storage } from '../storage';
 import type { VoiceMessage } from '@shared/schema';
 
