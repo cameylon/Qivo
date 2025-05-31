@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { Server } from 'http';
 import { voiceProcessor } from './voiceProcessor';
 import { fastVoiceProcessor } from './fastVoiceProcessor';
+import { ultraFastProcessor } from './ultraFastProcessor';
 import { storage } from '../storage';
 import type { VoiceMessage } from '@shared/schema';
 
@@ -179,7 +180,20 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Use fast voice processor for immediate transcription feedback
+      // Use ultra-fast processor for minimal latency
+      await ultraFastProcessor.processAudioChunkUltraFast(
+        clientId,
+        audioBuffer,
+        client.sessionId,
+        (data) => {
+          this.sendMessage(client.ws, {
+            type: 'response',
+            data
+          });
+        }
+      );
+
+      // Use fast voice processor for complete analysis in background
       console.log(`Starting fast transcription for session ${client.sessionId}`);
       const fastResult = await fastVoiceProcessor.processVoiceForRealtime(
         audioBuffer,
