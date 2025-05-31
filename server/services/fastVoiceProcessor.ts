@@ -40,10 +40,16 @@ export class FastVoiceProcessor {
     audioBuffer: Buffer,
     sessionId: number,
     audioFormat: string,
-    transcriptionResult: any,
+    transcriptionResult?: any,
     websocketCallback?: (data: any) => void
   ): Promise<void> {
     try {
+      // If no transcription result provided, get it first
+      if (!transcriptionResult) {
+        console.log(`🔄 Getting transcription for background analysis`);
+        transcriptionResult = await openaiService.transcribeAudio(audioBuffer, audioFormat);
+      }
+
       console.log(`🔄 Starting background analysis for: "${transcriptionResult.text}"`);
 
       // Run all analysis tasks in parallel

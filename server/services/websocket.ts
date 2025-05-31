@@ -158,7 +158,7 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Use ultra-fast processor for immediate transcription and get result
+      // Use ultra-fast processor for immediate transcription
       await ultraFastProcessor.processAudioChunkUltraFast(
         clientId,
         audioBuffer,
@@ -171,17 +171,10 @@ export class VoiceWebSocketServer {
         }
       );
 
-      // Also run fast voice processor for complete analysis (emotion + AI)
+      // Run complete analysis with all features
       setTimeout(async () => {
         try {
           console.log(`🔄 Starting complete analysis with emotion and AI response`);
-          await fastVoiceProcessor.processVoiceForRealtime(
-            audioBuffer,
-            client.sessionId!,
-            'webm'
-          );
-          
-          // Get the transcription result and run background analysis
           await fastVoiceProcessor.processBackgroundAnalysis(
             audioBuffer,
             client.sessionId!,
@@ -198,7 +191,7 @@ export class VoiceWebSocketServer {
         } catch (error) {
           console.error('Complete analysis error:', error);
         }
-      }, 500);
+      }, 200);
 
     } catch (error) {
       console.error(`Audio processing error for client ${clientId}:`, error);
