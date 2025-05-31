@@ -27,7 +27,7 @@ export class UltraFastProcessor {
       // Set aggressive timeout for ultra-fast processing
       this.processingTimeout.set(clientId, setTimeout(async () => {
         await this.processAccumulatedAudioUltraFast(clientId, sessionId, websocketCallback);
-      }, 200)); // Process after 200ms of silence
+      }, 50)); // Process after 50ms of silence for maximum speed
       
     } catch (error) {
       console.error('Ultra-fast audio chunk processing failed:', error);
@@ -46,8 +46,8 @@ export class UltraFastProcessor {
       // Combine all chunks
       const combinedBuffer = Buffer.concat(chunks);
       
-      // Skip if too small
-      if (combinedBuffer.length < 512) {
+      // Skip if too small (reduced threshold for faster processing)
+      if (combinedBuffer.length < 256) {
         console.log('⚡ Audio too small for ultra-fast processing');
         return;
       }
