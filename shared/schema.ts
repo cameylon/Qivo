@@ -108,7 +108,7 @@ export type InsertSystemMetrics = z.infer<typeof insertSystemMetricsSchema>;
 
 // WebSocket message types
 export const voiceMessageSchema = z.object({
-  type: z.enum(['audio', 'control', 'response']),
+  type: z.enum(['audio', 'control', 'response', 'data']),
   data: z.any(),
   sessionId: z.string().optional(),
   timestamp: z.number().optional(),
