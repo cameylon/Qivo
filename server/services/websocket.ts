@@ -139,6 +139,21 @@ export class VoiceWebSocketServer {
           data: { action: 'pong', timestamp: Date.now() }
         });
         break;
+      case 'get_conversations':
+        await this.handleGetConversations(clientId, data);
+        break;
+      case 'get_session_conversations':
+        await this.handleGetSessionConversations(clientId, data);
+        break;
+      case 'get_session_metrics':
+        await this.handleGetSessionMetrics(clientId, data);
+        break;
+      case 'get_speakers':
+        await this.handleGetSpeakers(clientId);
+        break;
+      case 'get_system_metrics':
+        await this.handleGetSystemMetrics(clientId);
+        break;
       default:
         console.warn(`Unknown control action: ${data.action}`);
     }
@@ -280,6 +295,128 @@ export class VoiceWebSocketServer {
     } catch (error) {
       console.error(`Failed to end session for client ${clientId}:`, error);
       this.sendError(client.ws, `Failed to end voice session: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async handleGetConversations(clientId: string, data: any) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      const limit = data.limit || 50;
+      const conversations = await storage.getRecentConversations(limit);
+      
+      this.sendMessage(client.ws, {
+        type: 'data',
+        data: {
+          action: 'conversations_response',
+          conversations,
+          requestId: data.requestId
+        }
+      });
+    } catch (error) {
+      this.sendError(client.ws, `Failed to fetch conversations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async handleGetSessionConversations(clientId: string, data: any) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      const sessionId = parseInt(data.sessionId);
+      if (isNaN(sessionId)) {
+        this.sendError(client.ws, 'Invalid session ID');
+        return;
+      }
+
+      const conversations = await storage.getConversationsBySession(sessionId);
+      
+      this.sendMessage(client.ws, {
+        type: 'data',
+        data: {
+          action: 'session_conversations_response',
+          conversations,
+          sessionId,
+          requestId: data.requestId
+        }
+      });
+    } catch (error) {
+      this.sendError(client.ws, `Failed to fetch session conversations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async handleGetSessionMetrics(clientId: string, data: any) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      const sessionId = parseInt(data.sessionId);
+      if (isNaN(sessionId)) {
+        this.sendError(client.ws, 'Invalid session ID');
+        return;
+      }
+
+      const metrics = await voiceProcessor.getSessionMetrics(sessionId);
+      
+      this.sendMessage(client.ws, {
+        type: 'data',
+        data: {
+          action: 'session_metrics_response',
+          metrics,
+          sessionId,
+          requestId: data.requestId
+        }
+      });
+    } catch (error) {
+      this.sendError(client.ws, `Failed to fetch session metrics: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async handleGetSpeakers(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      const speakers = await storage.getAllSpeakerProfiles();
+      
+      this.sendMessage(client.ws, {
+        type: 'data',
+        data: {
+          action: 'speakers_response',
+          speakers
+        }
+      });
+    } catch (error) {
+      this.sendError(client.ws, `Failed to fetch speaker profiles: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }
+
+  private async handleGetSystemMetrics(clientId: string) {
+    const client = this.clients.get(clientId);
+    if (!client) return;
+
+    try {
+      const metrics = await storage.getLatestSystemMetrics();
+      const connectionInfo = {
+        wsConnections: this.getConnectionCount(),
+        activeSessions: this.getActiveSessionCount(),
+        uptime: Math.floor(process.uptime()),
+      };
+
+      this.sendMessage(client.ws, {
+        type: 'data',
+        data: {
+          action: 'system_metrics_response',
+          metrics: {
+            ...metrics,
+            ...connectionInfo,
+            timestamp: new Date().toISOString(),
+          }
+        }
+      });
+    } catch (error) {
+      this.sendError(client.ws, `Failed to fetch system metrics: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
