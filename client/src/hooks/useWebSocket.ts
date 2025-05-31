@@ -80,7 +80,8 @@ export function useWebSocket(): UseWebSocketReturn {
   const connect = useCallback(() => {
     try {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-      const wsUrl = `${protocol}//${window.location.host}/ws`;
+      const hostname = window.location.hostname;
+      const wsUrl = `${protocol}//${hostname}:8080`;
       
       wsRef.current = new WebSocket(wsUrl);
 
