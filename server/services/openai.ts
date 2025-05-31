@@ -102,21 +102,22 @@ export class OpenAIService {
       const transcription = await openai.audio.transcriptions.create({
         file: file,
         model: "whisper-1",
-        response_format: "json",
+        response_format: "text", // Faster than json - no parsing needed
         language: "en",
-        temperature: 0.0,
+        temperature: 0.0, // Deterministic for speed
+        prompt: "Voice message transcription." // Helps with context
       });
 
-      console.log(`Transcription successful: "${transcription.text}"`);
+      console.log(`Transcription successful: "${transcription}"`);
       const processingTime = Date.now() - startTime;
 
-      if (!transcription.text || transcription.text.trim().length === 0) {
+      if (!transcription || transcription.trim().length === 0) {
         console.warn("Empty transcription result from OpenAI");
         throw new Error("No speech detected in audio");
       }
 
       return {
-        text: transcription.text.trim(),
+        text: transcription.trim(),
         confidence: 0.95,
         duration: undefined,
       };
