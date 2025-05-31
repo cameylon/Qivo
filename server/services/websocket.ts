@@ -179,48 +179,29 @@ export class VoiceWebSocketServer {
         }
       });
 
-      // Process the voice message for real-time transcription
-      console.log(`Starting real-time voice processing for session ${client.sessionId}`);
-      const result = await voiceProcessor.processVoiceMessage(
+      // Use fast voice processor for immediate transcription feedback
+      console.log(`Starting fast transcription for session ${client.sessionId}`);
+      const fastResult = await fastVoiceProcessor.processVoiceForRealtime(
         audioBuffer,
         client.sessionId,
         'webm'
       );
-      console.log(`Real-time transcription completed: "${result.transcript}"`);
+      console.log(`Fast transcription completed (${fastResult.processingTime}ms): "${fastResult.transcript}"`);
 
-      // Send transcript immediately for real-time display
+      // Send immediate transcription response for real-time feedback
       this.sendMessage(client.ws, {
         type: 'response',
         data: {
           action: 'transcript_ready',
-          transcript: result.transcript,
-          confidence: result.confidence,
-          timestamp: Date.now(),
-        }
-      });
-
-      // Send the complete result back to client
-      this.sendMessage(client.ws, {
-        type: 'response',
-        data: {
-          action: 'voice_processed',
-          transcript: result.transcript,
-          confidence: result.confidence,
-          emotion: result.emotion,
+          transcript: fastResult.transcript,
+          confidence: fastResult.confidence,
+          processingTime: fastResult.processingTime,
           speaker: {
-            id: result.speaker.speakerId,
-            name: result.speaker.name,
-            confidence: '85%',
-            isMock: false,
+            id: 'user',
+            name: 'User'
           },
-          aiResponse: result.aiResponse,
-          aiAudio: result.aiAudio ? {
-            audioData: result.aiAudio.audioBuffer.toString('base64'),
-            format: result.aiAudio.format,
-            processingTime: result.aiAudio.processingTime
-          } : null,
-          processingTime: result.processingTime,
           timestamp: Date.now(),
+          status: 'transcribed' // Indicates this is immediate transcription
         }
       });
 
